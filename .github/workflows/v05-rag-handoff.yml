@@ -1,0 +1,53 @@
+name: Verify prepared RAG source
+on:
+  push:
+    branches: [build/v05-rag-20261101]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 9712affa22991a4b021fccdb8e913b66d145a4f3
+          fetch-depth: 0
+      - name: Import only the reviewed public source bundle
+        run: |
+          curl --fail --location --retry 2 --max-time 60 https://sb-3olbuy47h1vo.vercel.run/trade-v05.bundle -o /tmp/trade-v05.bundle
+          echo '97b6ccf87a851613fd86f78e16fe455e0c08755e190d2a997b485490e1f7b863  /tmp/trade-v05.bundle' | sha256sum -c -
+          git bundle verify /tmp/trade-v05.bundle
+          git fetch /tmp/trade-v05.bundle refs/heads/release/v0.5-rag-deepseek:refs/heads/release/v0.5-rag-deepseek
+          git checkout release/v0.5-rag-deepseek
+          test "$(git rev-parse HEAD)" = 'd6bd5c9faef0d19bdee8db582da87df1750400a8'
+          git merge-base --is-ancestor 9712affa22991a4b021fccdb8e913b66d145a4f3 HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install, audit and verify server and frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm test
+          npm run build
+          npm run rag:check
+      - name: Install browser and Korean fonts for synthetic UI tests
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
+      - name: Validate previous workflows and RAG UI
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trade-rag-v05-qa
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+      - name: Push verified source branch without modifying main
+        run: git push origin HEAD:refs/heads/release/v0.5-rag-deepseek
