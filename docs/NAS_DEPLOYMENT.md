@@ -47,7 +47,45 @@ HTTPS 인증서·HTTP→HTTPS 전환, 로그인·로그아웃, Secure/HttpOnly/S
 
 문제가 있으면 새 `trade` 경로와 이 Compose 프로젝트만 중지하고 소스 릴리스·환경 경로를 이전 값으로 되돌린다. `down -v`, DB 삭제, `docker system prune`, 기존 서비스 전체 재시작은 사용하지 않는다.
 
-## 실제 배포 결과 — 2026-10-31
+## v0.4 보존 업데이트 결과 — 2026-11-01
+
+**현재 서비스는 [https://trade.h19h19.com](https://trade.h19h19.com)의 v0.4.0 합성 시연**입니다. 최신 main 기준 `9712affa22991a4b021fccdb8e913b66d145a4f3`을 Git archive로 전달해 NAS에서 빌드했습니다. 앱 코드 변경 없이 해당 커밋 그대로 배포했으며 아래 v0.3 기록은 이전 이력입니다.
+
+| 항목 | 실제 확인값 |
+|---|---|
+| 소스 / 현재 릴리스 | `9712affa22991a4b021fccdb8e913b66d145a4f3` / `/volume2/docker/trade/releases/9712affa22991a4b021fccdb8e913b66d145a4f3` |
+| 현재 링크 | `/volume2/docker/trade/current` → 위 릴리스 |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:9712aff` |
+| 이미지 ID | `sha256:eb2e7d0b6237b70ea5db78889b8b90aa3edbdb274e3f22be016a47cc5f2f9094` |
+| DB / 업로드 | `/volume2/docker/trade/demo-data/trade.sqlite` / `/volume2/docker/trade/demo-data/uploads/` (동일 경로 유지) |
+| 런타임 | Node 24.22.2, `DEMO_MODE=true`, `NODE_ENV=development`, DB `user_version=2` |
+| 기존 연결 | `127.0.0.1:14310`, `10.253.43.0/28`, 기존 Docker network ID, HTTPS 출처·Secure 쿠키·Tunnel/DNS 유지 |
+| 최초 검증 백업 | `/volume2/docker/trade/backups/2026-11-01T06-38-04Z-v04-v1` |
+| 교체 직전 v1 백업 | `/volume2/docker/trade/backups/2026-11-01T06-41-33Z-cutover-v1` |
+| 업데이트·검수 후 v2 백업 | `/volume2/docker/trade/backups/2026-11-01T06-49-41Z-v04-post` |
+| 배포 검증 기록 | `/volume2/docker/trade/deployments/v04-2026-11-01T06-38-04Z/` (비공개 NAS 경로) |
+
+로컬 작업 사본 `~/Developer/trade`에는 미커밋 변경이 없었습니다. 기존 NAS 릴리스의 모든 추적 파일 SHA-256을 이전 커밋과 비교해 현장 수정이 없음을 확인했습니다. 데이터 경로·마운트와 DB 버전을 먼저 확인했고 기존 DB를 새로 만들거나 계정·첨부를 초기화하지 않았습니다. `.env.nas`는 NAS 내부에 원본을 보존한 뒤 `TRADE_RELEASE`만 변경했습니다. 다른 앱 컨테이너 ID, 기존 Docker network ID 및 Cloudflare 라우팅 설정의 SHA-256은 유지됐고 Tunnel 커넥터도 재시작하지 않았습니다.
+
+### 백업·마이그레이션·복원
+
+앱만 중지하고 v1 DB+uploads를 백업했습니다. SQLite 무결성/참조, 첨부 14개 SHA-256을 검사하고 `/volume2/docker/trade/restore-checks/2026-11-01T06-38-04Z-v04-v1`에 복원했습니다. 구버전의 별도 비공개 시험 컨테이너에서 기존 로그인·초안·사진·타기관 접근 차단을 확인한 뒤 기존 앱을 재가동했습니다.
+
+같은 백업을 새 `2026-11-01T06-38-04Z-v04-v1-migrated-v2` 경로에 다시 복원하여 v2로 마이그레이션했습니다. 기존 **13개 테이블 전체 행의 정렬된 JSON 해시**가 전후 동일했고 재오픈도 멱등이었습니다. 기관 3개·계정 7개·물품 7개·자산 6개·첨부 14개를 포함한 기존 자료와 로그인·파일 ACL을 확인했습니다. NAS 이미지 빌드·59개 서버 테스트 후 교체 직전 v1 백업과 별도 `2026-11-01T06-41-33Z-cutover-v1` 복원 사본을 추가했습니다. 실제 DB 마이그레이션에서도 같은 전체 행 보존 검사를 통과한 후 앱 컨테이너만 교체했습니다.
+
+공개 사이트 검수 후 앱을 다시 중지해 v2 백업을 만들고 `/volume2/docker/trade/restore-checks/2026-11-01T06-49-41Z-v04-post`에 복원했습니다. 별도 비공개 v0.4 서버에서 기존·신규 초안과 첨부 **15개**, 한글 사진 품명·명판 용도, 50/20/10 상태 배분, 저장한 배송 예상 기록을 확인했습니다. 실제 앱도 재기동 후 같은 검사를 통과했습니다. 시험 컨테이너만 제거하고 모든 백업·복원 디렉터리는 보존했습니다.
+
+**롤백 시 v2 원본에 v0.3을 바로 실행하지 마세요.** 먼저 앱만 중지하고 v2 DB·uploads를 별도로 백업합니다. 새 경로에 검증한 v1 백업을 복원한 뒤 `TRADE_DATA_DIR`을 그 사본으로, `TRADE_RELEASE`와 `current`를 보존된 `174431a` 릴리스로 바꾸고 동일 Compose 프로젝트의 앱만 실행하세요. 교체 후 신규 v2 자료는 v1 백업에 없으므로 별도로 보존·대조해야 합니다. 기존 원본을 덮어쓰거나 볼륨을 지우는 복구는 사용하지 않습니다.
+
+### 실제 도메인 검수와 남은 설정
+
+macOS/Node 24와 NAS Linux Docker에서 서버 **59개**, TypeScript/Vite 빌드, Chrome E2E **9개**를 통과했습니다(E2E는 로컬 4311의 별도 DB). 알려진 npm 취약점은 0건입니다. 실제 HTTPS 로그인·쿠키·HTTP→HTTPS 308·CSRF 거부·파일 ACL·한글 첨부·UTF-8 BOM CSV와 기존 자료의 영속성을 확인했습니다. 1440px/390px 화면을 직접 조작하고 생성 캡처를 이미지 뷰어로 열어 확인했습니다. 상세 검수는 [V04_TEST_REPORT.md](V04_TEST_REPORT.md)를 따릅니다.
+
+**비식별 실제 에듀파인 파일과 공급자 승인 자료는 제공되지 않았습니다.** 다단 머리글·수동 매핑·합계·80개 등록·재등록·충돌 롤백은 합성 XLSX/XLS로 검수했으며 실제 학교 양식 검수 완료로 표시하지 않습니다. 조달청/참고사진·AI 모델/키·주소/경로는 모두 false/빈 값이고 실제 외부 호출 성공은 없습니다. K-에듀파인·온비드 공식 연결도 미연결입니다. 기본 운송 단가는 `sample-2026-11-v1`의 시연용 가정이며 업체 확정 견적·예약·배차·결제가 아닙니다.
+
+`npm run preflight`는 HTTPS·Secure 쿠키·저장소 무결성은 통과하고, 현재 합성 시연 설정의 `NODE_ENV`, 데모 모드, 시연 계정 분리 조건은 **미충족(종료 1)** 으로 보고했습니다. 이를 우회하지 않았으며 기관 정식 운영 준비 완료를 주장하지 않습니다. 백업은 동일 NAS 볼륨 내부에서 검증했으며 별도 저장소 재해복구는 남아 있습니다.
+
+## 이전 v0.3 실제 배포 결과 — 2026-10-31
 
 **[https://trade.h19h19.com](https://trade.h19h19.com)** 에 NAS 합성 시연 배포를 완료했다. 로컬 Mac에서 서버를 실행하지 않아도 NAS의 Docker 앱과 기존 NAS Cloudflare Tunnel로 응답한다. 사용자가 알려준 「포켓몬」 채팅의 기존 NAS 접속 설정을 찾아 사용했으며 인증 키·터널 비밀 자료는 복사하거나 Git에 넣지 않았다.
 
