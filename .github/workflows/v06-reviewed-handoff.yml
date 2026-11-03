@@ -1,0 +1,47 @@
+name: Verify prepared v0.6 source
+on:
+  push:
+    branches: [build/v06-reviewed-20261103]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Import reviewed source with fixed checksum and commit
+        run: |
+          curl --fail --show-error --location --retry 2 --max-time 60 https://sb-3bg7xzzzlzbx.vercel.run/trade-v06.bundle -o /tmp/trade-v06.bundle
+          echo '52a8de6f51d996bb1af54feb5a9a10f2eff59252b1d34a0e44048cda41c45fb1  /tmp/trade-v06.bundle' | sha256sum -c -
+          git bundle verify /tmp/trade-v06.bundle
+          git fetch /tmp/trade-v06.bundle refs/heads/release/v0.6-html-catalog:refs/heads/release/v0.6-html-catalog
+          test "$(git rev-parse release/v0.6-html-catalog)" = f26431aef2d9876bbb9fce41a0aae5662184bd80
+          git checkout release/v0.6-html-catalog
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Locked install and audit
+        run: npm ci && npm audit --audit-level=low
+      - name: Server regression and frontend build
+        run: npm test && npm run build
+      - name: Browser dependencies and Korean font
+        run: npx playwright install --with-deps chromium && sudo apt-get install -y fonts-noto-cjk
+      - name: Verify previous workflows and spreadsheet photo integration
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trade-v06-review-qa
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Push verified release branch without altering main
+        run: git push origin HEAD:refs/heads/release/v0.6-html-catalog
