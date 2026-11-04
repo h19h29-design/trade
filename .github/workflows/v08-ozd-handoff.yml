@@ -1,0 +1,59 @@
+name: Verify reviewed v0.8 OZD HTML5 adapter
+on:
+  push:
+    branches: [build/v08-ozd-verified-20261104]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Fetch reviewed source bundle with locked SHA
+        env:
+          BUNDLE_URL: https://sb-406fvl7mo7ti.vercel.run/trade-v08.bundle
+          BUNDLE_HASH: 054839ee26292bebf70072fd162848e0b527fe30c69a287d6cdbe6a0ae53b409
+          BASE_SHA: c9fdbe11421828759f780870bd36b010d91bdc35
+          RELEASE_SHA: 0252867e7163822167c5482070c832592ecd4827
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 35 "$BUNDLE_URL" -o /tmp/trade-v08.bundle
+          echo "$BUNDLE_HASH  /tmp/trade-v08.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-v08.bundle
+          git fetch /tmp/trade-v08.bundle refs/heads/release/v0.8-ozd-html5
+          test "$(git rev-parse FETCH_HEAD)" = "$RELEASE_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test -f tools/ozd-bridge/html5-converter.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Locked install, security audit, regression and build
+        run: |
+          npm ci
+          npm audit --audit-level=low
+          npm test
+          npm run build
+      - name: Chromium dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Browser integration and legacy flow tests
+        run: npm run test:e2e
+      - name: Keep QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ozd-html5-v08-qa
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+      - name: Push tested source release branch
+        if: success()
+        env:
+          RELEASE_SHA: 0252867e7163822167c5482070c832592ecd4827
+        run: |
+          git push origin "$RELEASE_SHA:refs/heads/release/v0.8-ozd-html5"
