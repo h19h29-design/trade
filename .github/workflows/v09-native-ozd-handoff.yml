@@ -1,0 +1,57 @@
+name: Verify native OZD conversion v0.9
+on:
+  push:
+    branches: [build/v09-native-ozd-20261104]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Import reviewed native-parser source with pinned hash
+        env:
+          BUNDLE_URL: https://sb-2pae4if3tvvb.vercel.run/trade-v09.bundle
+          BUNDLE_SHA256: 6255711f85aac1198e27e0d983b9f6f09c833f00d9c5546f2e5f7d9fbc44cd0c
+          BASE_SHA: 9a538063de3f3e9e560f0c18358104baf78b656e
+          RELEASE_SHA: 5f8393ecef4f57e4da01a81e3ac19758c87a1b2d
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 40 "$BUNDLE_URL" -o /tmp/trade-v09.bundle
+          echo "$BUNDLE_SHA256  /tmp/trade-v09.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-v09.bundle
+          git fetch /tmp/trade-v09.bundle refs/heads/release/v0.9-native-ozd
+          test "$(git rev-parse FETCH_HEAD)" = "$RELEASE_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies and audit
+        run: |
+          npm ci
+          npm audit --audit-level=low
+      - name: Native parser, access controls, legacy regressions and build
+        run: |
+          npm test
+          npm run build
+      - name: Browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: OZD drag, native conversion, XLSX download and complete app flows
+        run: npm run test:e2e
+      - name: QA report and synthetic screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trade-native-ozd-v09-qa
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+      - name: Push verified source branch without changing main
+        if: success()
+        run: git push origin 5f8393ecef4f57e4da01a81e3ac19758c87a1b2d:refs/heads/release/v0.9-native-ozd
