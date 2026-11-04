@@ -1,0 +1,51 @@
+name: Verify prepared v0.7.1 source
+on:
+  push:
+    branches: [build/v071-reviewed-20261104]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Import exactly the reviewed public-source commit
+        run: |
+          curl --fail --location --retry 2 --connect-timeout 15 --max-time 60 https://sb-ttrwq1s8923j.vercel.run/trade-v071.bundle -o /tmp/trade-v071.bundle
+          echo '144f9bc73c68214bd11b677b453c8157edaa5035b63ded0343ca15825accb456  /tmp/trade-v071.bundle' | sha256sum -c -
+          git bundle verify /tmp/trade-v071.bundle
+          git fetch /tmp/trade-v071.bundle refs/heads/release/v0.7.1-intake-review
+          test "$(git rev-parse FETCH_HEAD)" = c9fdbe11421828759f780870bd36b010d91bdc35
+          git merge-base --is-ancestor 80a74466edb3ff987acc6374810cfd090bca2ad7 FETCH_HEAD
+          git checkout --detach c9fdbe11421828759f780870bd36b010d91bdc35
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install and audit locked dependencies
+        run: npm ci && npm audit --audit-level=low
+      - name: Server regressions and frontend build
+        run: npm test && npm run build
+      - name: Browser dependencies
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+      - name: Existing workflows and document/chat acceptance
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trade-v071-reviewed-qa
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Push verified source branch without changing main
+        run: git push origin HEAD:refs/heads/release/v0.7.1-intake-review
