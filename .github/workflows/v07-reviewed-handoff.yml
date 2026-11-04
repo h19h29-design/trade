@@ -1,0 +1,51 @@
+name: Verify prepared v0.7 source
+on:
+  push:
+    branches: [build/v07-reviewed-20261104]
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Import only the reviewed public source commit
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 60 'https://sb-5ox8lzmv68qi.vercel.run/trade-v07.bundle' -o /tmp/trade-v07.bundle
+          echo '88f8375eb26782a453861944560f2fbfd4c5ee0b297088dbcda9ecc8ccf72fe2  /tmp/trade-v07.bundle' | sha256sum -c -
+          git bundle verify /tmp/trade-v07.bundle
+          git fetch /tmp/trade-v07.bundle refs/heads/release/v0.7-document-chat
+          test "$(git rev-parse FETCH_HEAD)" = '80a74466edb3ff987acc6374810cfd090bca2ad7'
+          git merge-base --is-ancestor 8e249ed6b50285f733fe19c195358992e7ef76b6 FETCH_HEAD
+          git checkout --detach 80a74466edb3ff987acc6374810cfd090bca2ad7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Locked dependencies and advisory check
+        run: npm ci && npm audit --audit-level=low
+      - name: Backend regression and production build
+        run: npm test && npm run build
+      - name: Browser dependencies and Korean rendering font
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y fonts-noto-cjk
+      - name: Existing workflow, file intake and conversational UI validation
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trade-v07-review-qa
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Push verified source branch without altering main
+        run: git push origin 80a74466edb3ff987acc6374810cfd090bca2ad7:refs/heads/release/v0.7-document-chat
