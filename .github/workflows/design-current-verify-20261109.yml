@@ -1,0 +1,60 @@
+name: Verify current-main design adaptation and publish PR branch
+on:
+  push:
+    branches: [build/design-current-handoff-20261109]
+permissions:
+  contents: write
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Retrieve reviewed design-only commit
+        env:
+          SOURCE_URL: https://sb-6mj579we3cl5.vercel.run/design/trade-design-current.bundle
+          SOURCE_SHA256: b2b90937b202112793cf79c158a227124ce031f015b384bbc4778b1b8083d0ac
+          BASE_SHA: 01b4ecca51d09e20e26794df6ce02c0c62d83baf
+          DESIGN_SHA: 12e5211756d938bcc7d3124de06b03d246023276
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 45 "$SOURCE_URL" -o /tmp/trade-design.bundle
+          echo "$SOURCE_SHA256  /tmp/trade-design.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-design.bundle
+          git fetch /tmp/trade-design.bundle refs/heads/codex/design-current-20261109
+          test "$(git rev-parse FETCH_HEAD)" = "$DESIGN_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git status --porcelain | wc -l)" -eq 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies and audit
+        run: |
+          npm ci
+          npm audit --audit-level=low
+      - name: Verify server rules, imports, security and TypeScript production build
+        run: |
+          npm test
+          npm run build
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - name: Validate responsive UX and original business workflows
+        run: npm run test:e2e
+      - name: Store isolated screenshots and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-design-qa
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+      - name: Publish verified code to a new PR branch (never main)
+        if: success()
+        env:
+          DESIGN_SHA: 12e5211756d938bcc7d3124de06b03d246023276
+        run: git push origin "$DESIGN_SHA:refs/heads/codex/design-current-20261109"
