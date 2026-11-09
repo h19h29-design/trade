@@ -1,0 +1,57 @@
+name: Verify AI core v0.10 and publish review branch
+on:
+  push:
+    branches: [build/ai-core-verified-20261109]
+permissions:
+  contents: write
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Fetch reviewed implementation bundle
+        env:
+          SOURCE_URL: https://sb-5hguf31hd744.vercel.run/trade-ai-core-v010.bundle
+          SOURCE_HASH: 10967fd61c1ed6e7ebf2494f274a716ee17a35a1af16e9c2dbfa05e10e67fe9b
+          BASE_SHA: 12e5211756d938bcc7d3124de06b03d246023276
+          FEATURE_SHA: 8a8056ecd4d701986d356fadb492c6dff9839fc5
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 40 "$SOURCE_URL" -o /tmp/trade-ai-core.bundle
+          echo "$SOURCE_HASH  /tmp/trade-ai-core.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-ai-core.bundle
+          git fetch /tmp/trade-ai-core.bundle refs/heads/codex/ai-core-20261109
+          test "$(git rev-parse FETCH_HEAD)" = "$FEATURE_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies and audit
+        run: |
+          npm ci
+          npm audit --audit-level=low
+      - name: Test domain AI authorization groundedness and source preservation
+        run: |
+          npm test
+          npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check AI search registration and original workflows
+        run: npm run test:e2e
+      - name: Save synthetic QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-core-v010-qa
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+      - name: Push verified feature branch only
+        if: success()
+        run: git push origin 8a8056ecd4d701986d356fadb492c6dff9839fc5:refs/heads/codex/ai-core-20261109
