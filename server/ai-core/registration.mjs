@@ -5,6 +5,7 @@ import {uid,now,must,audit,transaction} from '../db.mjs';
 import {providerStatus} from '../providers.mjs';
 import {coreReady,modelClient,extractMetadata} from './model.mjs';
 import {categoryFor} from './ranking.mjs';
+const normalized=s=>String(s||'').normalize('NFKC').replace(/[^0-9a-z가-힣]/gi,'').toLowerCase();
 
 export function startRegistration(db,user,batchId,input={}){
  svc.business(user);
@@ -42,7 +43,7 @@ export async function enrichRegisteredLot(db,user,id,options){
    if(!candidates.length&&code)candidates=(await catalog.search(user,{name:draft.title.slice(0,100)})).candidates;
    const matches=candidates.filter(c=>c.matchType==='EXACT_IDENTIFIER'&&c.actualIdentificationCode===code);
    if(matches.length===1){
-    exact=true;const p=matches[0];const saved=saveProposal(p,'PROCUREMENT');const fields=['manufacturer','model','description','actualIdentificationCode','classificationName'].filter(k=>!draft[k]&&typeof p[k]==='string'&&p[k]);
+    exact=true;const p=matches[0];const saved=saveProposal(p,'PROCUREMENT');const fields=['manufacturer','model','description','actualIdentificationCode','classificationName'].filter(k=>!draft[k]&&typeof p[k]==='string'&&p[k]&&!(k==='manufacturer'&&[draft.title,draft.originalName,p.classificationName].some(x=>normalized(x)&&normalized(x)===normalized(p[k]))));
     if(fields.length){applySuggestion(db,user,saved.id,{fields,version:saved.version,emptyOnly:true});appliedFields.push(...fields);}
     notes.push('번호 일치 조달정보로 빈 항목만 보완했습니다. 실제 명판 대조는 필요합니다.');
    }else{

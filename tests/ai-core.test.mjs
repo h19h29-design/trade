@@ -92,6 +92,11 @@ test('조달 품명후보만 맞으면 제품번호와 제조사를 자동 확�
  const h=await http(t,{env:procurement,fetcher:async()=>catalogJson('99999999')});const u=await(await h.upload(workbook())).json();const receipt=await(await h.call('/ai-core/register/'+u.id+'/start')).json();await h.call('/ai-core/register/'+u.id+'/enrich',{data:{useAi:false}});
  const d=JSON.parse(h.db.prepare('SELECT data FROM lots WHERE id=?').get(receipt.lotIds[0]).data);assert.equal(d.actualIdentificationCode,'');assert.equal(d.identificationCode,'00001234');assert.equal(d.manufacturer,'');
 });
+test('조달 제조사 값이 품명과 같은 일반명이면 자동 입력하지 않음',async t=>{
+ const h=await http(t,{env:procurement,fetcher:async()=>apiJson({response:{header:{resultCode:'00'},body:{items:[{prdctIdntNo:'00001234',krnPrdctNm:'회의 의자',mnfctCorpNm:'회의 의자',prdctClsfcNoNm:'의자',useYn:'Y'}]}}})});
+ const u=await(await h.upload(workbook())).json();const receipt=await(await h.call('/ai-core/register/'+u.id+'/start')).json();await h.call('/ai-core/register/'+u.id+'/enrich',{data:{useAi:false}});
+ const d=JSON.parse(h.db.prepare('SELECT data FROM lots WHERE id=?').get(receipt.lotIds[0]).data);assert.equal(d.manufacturer,'');assert.equal(d.classificationName,'의자');
+});
 test('자료의 기관별 격리 및 잘못된 자동 매핑 시 0건 생성',async t=>{
  const h=await http(t);const u=await(await h.upload(workbook())).json();const other=await h.login('third');assert.equal((await h.call('/ai-core/register/'+u.id+'/start',{session:other})).status,404);
  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['엉뚱한열','미지값'],['의자',4]]),'표');const bad=await(await h.upload(XLSX.write(wb,{type:'buffer',bookType:'xlsx'}))).json();const n=h.db.prepare('SELECT COUNT(*) n FROM lots').get().n;
@@ -127,6 +132,15 @@ test('등록 후 미리보기 만료와 관계없이 보완 상태를 안전하�
 });
 test('검색의 제외 표현은 금지한 물품을 추천하지 않음',()=>{
  const f=fixture();try{published(f);const lots=svc.listLots(f.db,f.buyer,{min:1});assert.equal(retrieve(lots,inferCriteria('의자 말고 책상')).length,0);}finally{f.db.close();}
+});
+test('AI 동의어 하나가 원문과 무관한 물품을 새로 만들지 않음',()=>{
+ const lot={id:'synthetic-board',title:'수업용 이동식 화이트보드',model:'',manufacturer:'',classificationName:'',specification:'',description:'',photos:[],groups:[]};
+ assert.deepEqual(retrieve([lot],inferCriteria('3단 이동서랍 20개'),['이동식']),[]);
+});
+test('AI 동의어 두 개로도 낮은 관련 후보는 검색 결과에 남기지 않음',async t=>{
+ const h=await http(t,{env:enabled,fetcher:async(url,options)=>{const p=JSON.parse(JSON.parse(options.body).messages[1].content);return p.sources?modelJson({items:[]}):modelJson({terms:['이동식','화이트보드']});}});
+ published(h,{...draft(),title:'수업용 이동식 화이트보드',originalName:'화이트보드',category:'OTHER',manufacturer:'',model:'',description:'',pickup:'',actualCount:2,ledgerCount:2,decisionQty:2,groups:[{condition:'GOOD',quantity:2,inspection:'ALL',note:''}]});
+ const j=await (await h.call('/ai-core/search',{data:{query:'3단 이동서랍 20개',quantity:20,consent:true}})).json();assert.equal(j.results.length,0);assert.ok(j.notes.some(n=>n.includes('낮은 관련')));
 });
 
 test('담당자가 공개를 확인하지 않은 출발 좌표는 타 기관 API에서 숨김',()=>{

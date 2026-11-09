@@ -25,21 +25,27 @@ function content(lot){return [lot.title,lot.model,lot.manufacturer,lot.classific
 /** BM25-like token score + Korean bigram coverage; keyword vocabulary is expanded, never the data. */
 export function retrieve(lots,criteria,expanded=[]){
  const terms=queryTerms(criteria,expanded);if(!terms.length)return [];
+ const originalSet=new Set(criteria.terms);
  const documents=lots.map(lot=>({lot,text:normalize(content(lot)),tokens:words(content(lot))}));
  const df=new Map(terms.map(t=>[t,documents.filter(d=>d.text.includes(t)).length]));
  return documents.map(doc=>{
   const matches=terms.filter(t=>doc.text.includes(t));
+  const originalMatches=matches.filter(t=>originalSet.has(t));
   // Known noun groups are a relevance gate, not a hard requirement for descriptive synonyms.
   const anchors=GROUPS.slice(0,10).filter(g=>g.some(t=>normalize(criteria.searchText||criteria.query).includes(t)));
   const gated=!anchors.length||anchors.some(g=>g.some(t=>doc.text.includes(t)));
+  const anchorMatched=anchors.some(g=>g.some(t=>doc.text.includes(t)));
+  const expandedMatches=matches.filter(t=>!originalSet.has(t)&&!GROUPS.some(g=>g.includes(t)));
+  // AI synonyms may widen recall, but a single unrelated modifier is not enough to invent a result.
+  const supported=originalMatches.length>0||anchorMatched||expandedMatches.length>=2;
   const excluded=(criteria.negatives||[]).some(n=>{const synonyms=GROUPS.find(g=>g.includes(n))||[n];return synonyms.some(t=>doc.text.includes(t));});
-  if(!matches.length||!gated||excluded)return null;
+  if(!matches.length||!gated||!supported||excluded)return null;
   const bm25=matches.reduce((n,t)=>n+Math.log(1+(documents.length+.5)/(df.get(t)+.5))*(normalize(doc.lot.title).includes(t)?2:1),0);
   const originals=criteria.terms.filter(t=>!GROUPS.some(g=>g.includes(t)));
   const core=anchors.length?anchors.filter(g=>g.some(t=>doc.text.includes(t))).length/anchors.length:matches.length/Math.max(terms.length,1);
   const extras=originals.length?originals.reduce((n,t)=>n+(doc.text.includes(t)?1:Math.min(.5,grams(t).filter(g=>doc.text.includes(g)).length/Math.max(grams(t).length,1)*.5)),0)/originals.length:1;
   const relevance=Math.min(1,.75*core+.25*extras);
-  return {lot:doc.lot,relevance,bm25,matches};
+  return {lot:doc.lot,relevance,bm25,matches,expandedOnly:originalMatches.length===0&&!anchorMatched};
  }).filter(Boolean).sort((a,b)=>b.bm25-a.bm25||b.relevance-a.relevance||a.lot.id.localeCompare(b.lot.id)).slice(0,40);
 }
 const rounded=n=>Math.round(n*10)/10;
@@ -70,5 +76,5 @@ export function rankCandidate(hit,criteria,delivery={status:'NEEDS_INFO',missing
   if(delivery.trips>1)add('trips',`${delivery.trips}회 운행이 필요한 적재 계산 결과입니다.`,'con');
  }else add('shipping','배송비 확인 필요: '+(delivery.missing||['운반 조건 확인']).join(', '),'con');
  add('delivery-warning','철거·설치·보험·계단·상하차 인력과 화물차 통행 제한은 별도 확인이 필요합니다.','con');
- return {lot:l,score,breakdown,pros,cons,evidence,delivery,sufficient:enough,scoreVersion:SCORING_VERSION,aiExplanation:null};
+ return {lot:l,score,breakdown,pros,cons,evidence,delivery,sufficient:enough,expandedOnly:hit.expandedOnly===true,scoreVersion:SCORING_VERSION,aiExplanation:null};
 }

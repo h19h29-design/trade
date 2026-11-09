@@ -4,13 +4,19 @@ services:
   app:
     environment:
       RAG_AI_ENABLED: ${RAG_AI_ENABLED:-false}
+      RAG_PROVIDER: ${RAG_PROVIDER:-deepseek}
       RAG_MODEL: ${RAG_MODEL:-deepseek-flash}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      HIVE_API_KEY: ${HIVE_API_KEY:-}
       RAG_EXTERNAL_APPROVED: ${RAG_EXTERNAL_APPROVED:-false}
       RAG_DAILY_LIMIT: ${RAG_DAILY_LIMIT:-50}
       RAG_LIBRARY_ENABLED: ${RAG_LIBRARY_ENABLED:-false}
       RAG_LIBRARY_EXTERNAL_APPROVED: ${RAG_LIBRARY_EXTERNAL_APPROVED:-false}
       RAG_CORPUS_DIR: /app/rag-private
+      AI_CORE_ENABLED: ${AI_CORE_ENABLED:-true}
+      AI_CORE_DATA_APPROVED: ${AI_CORE_DATA_APPROVED:-false}
+      AI_CORE_MODEL: ${AI_CORE_MODEL:-}
+      AI_CORE_DAILY_LIMIT: ${AI_CORE_DAILY_LIMIT:-100}
     volumes:
       - type: bind
         source: ${TRADE_RAG_CORPUS_DIR:?Set the reviewed absolute private corpus version directory}

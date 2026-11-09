@@ -1,5 +1,7 @@
 # 물품이음 v0.6 — HTML 장터 기능 통합
 
+> **2026-11-03 NAS 통합 검수:** 기존 NAS의 개선사항 schema3와 main 조달 schema3 충돌을 해소해 통합 schema4를 사용합니다. 실제 API·실제 엑셀 검수 및 현재 보존 조건은 [V06_COMPLETION.md](V06_COMPLETION.md), 복구 계획은 [V06_MIGRATION.md](V06_MIGRATION.md), 배포 현황은 [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md)의 최신 기록을 먼저 읽으세요. 아래88개·schema2→3·미실호출 기록은 최초 구현 시점입니다.
+
 작성일 2026-11-03. 기반 main: d6bd5c9faef0d19bdee8db582da87df1750400a8.
 사용자가 제공한 `불용물품장터_초안.zip`의 단일 HTML을 분석해 기능을 기존 React/Express 구조로 재구현했다. 원본 HTML·내장 물품번호·자산데이터·이미지를 공개 저장소 또는 시연 DB에 복사하지 않았다.
 

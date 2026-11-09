@@ -12,7 +12,7 @@ const visible=db=>user=>svc.listLots(db,user,{min:1}).filter(l=>!l.own&&l.state=
 export function mountAiCore(app,db,options={}){
  const {env=process.env,fetcher=fetch}=options,active=new Set();
  const guard=(user,action,limit=30)=>{svc.business(user);const n=db.prepare('SELECT COUNT(*) n FROM audit_events WHERE actor_id=? AND action=? AND created_at>?').get(user.id,action,new Date(Date.now()-3600000).toISOString()).n;must(n<limit,'시간당 처리 한도를 넘었습니다. 잠시 후 다시 시도하세요.',429);audit(db,user,action,user.id);};
- app.get('/api/ai-core/status',(req,res)=>{svc.business(req.user);const c=coreConfig(env);res.json({aiConfigured:coreReady(c),model:c.model,providers:providerStatus(env),scoreVersion:SCORING_VERSION,weights:WEIGHTS,corpus:'LIVE_PUBLISHED_LOTS',registration:'PRIVATE_DRAFT_ONLY',dailyLimit:c.dailyLimit});});
+ app.get('/api/ai-core/status',(req,res)=>{svc.business(req.user);const c=coreConfig(env);res.json({aiConfigured:coreReady(c),provider:c.provider,model:c.model,providers:providerStatus(env),scoreVersion:SCORING_VERSION,weights:WEIGHTS,corpus:'LIVE_PUBLISHED_LOTS',registration:'PRIVATE_DRAFT_ONLY',dailyLimit:c.dailyLimit});});
  app.post('/api/ai-core/search',async(req,res)=>{
   guard(req.user,'AI_CORE_SEARCH',60);const d=searchSchema.parse(req.body),key='search:'+req.user.id;must(!active.has(key),'이전 물품검색이 진행 중입니다.',429);active.add(key);
   try{
@@ -29,6 +29,9 @@ export function mountAiCore(app,db,options={}){
    if(results.length&&d.useAi&&d.consent&&coreReady(client.config)){
     try{const explanations=await explain(client,d.query,results);usedAi=true;for(const e of explanations){const r=results.find(r=>r.lot.id===e.id);if(r)r.aiExplanation=e;}}catch{notes.push('AI 비교 설명 검증 실패: 등록정보에서 계산한 장단점은 유지합니다.');}
    }
+   const beforeWeak=results.length;
+   results=results.filter(r=>!r.expandedOnly||r.score>=50);
+   if(results.length!==beforeWeak)notes.push('AI 동의어만 약하게 일치한 낮은 관련 후보는 제외했습니다.');
    // No private/deactivated/reserved stock may escape an async generation window.
    const fresh=new Map(visible(db)(req.user).map(l=>[l.id,l]));const count=results.length;
    results=results.filter(r=>{const latest=fresh.get(r.lot.id);return latest&&latest.version===r.lot.version&&latest.available===r.lot.available;});
