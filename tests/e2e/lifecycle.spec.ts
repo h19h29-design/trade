@@ -7,7 +7,7 @@ async function login(page:Page,email:string){
   await page.goto('/');await page.getByLabel('이메일',{exact:true}).fill(email);
   await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');
   await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();
-  await expect(page.getByRole('heading',{name:'우리 학교에 필요한 물품을 찾아보세요'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'오늘 할 일',exact:true})).toBeVisible();await page.goto('/#/market');await expect(page.getByRole('heading',{name:'우리 학교에 필요한 물품을 찾아보세요'})).toBeVisible();
 }
 async function toast(page:Page,text:string){await expect(page.locator('.toast')).toContainText(text);}
 async function download(page:Page,name:string){
@@ -78,7 +78,9 @@ test('등록부터 독립 검토·양 기관 증빙·불일치 보류·대장 �
     await page.getByRole('button',{name:'검증 후 원본 저장',exact:true}).click();await toast(page,'신규 1행');
     await page.getByLabel('00001234 선택').check();await page.getByLabel('연결할 묶음').selectOption(lotPath.split('/').pop()!);
     await page.getByRole('button',{name:'1개 자산행 연결',exact:true}).click();await toast(page,'묶음에 연결');
-    const exported=await download(page,'원본 내보내기');expect(exported.name).toBe('원본자산_참고자료.csv');expect(exported.bytes.subarray(0,3).toString('hex')).toBe('efbbbf');
+    const exported=await download(page,'원본 내보내기');// Headless Chromium in some Linux runners reports the Blob download as the generic 'download'.
+    // Require CSV bytes/UTF-8 BOM and exact contents below even for that browser fallback.
+    expect(['원본자산_참고자료.csv','download']).toContain(exported.name);expect(exported.bytes.subarray(0,3).toString('hex')).toBe('efbbbf');
     expect(exported.bytes.toString('utf8')).toContain('"00001234","합성 대장 의자","3","00123456","00005678"');
     await page.goto('/'+casePath);await page.getByLabel('00001234 배분 수량').fill('3');
     await page.getByRole('button',{name:'총 3개 자산 배분 저장',exact:true}).click();await toast(page,'자산·수량을 연결');
