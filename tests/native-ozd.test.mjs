@@ -81,5 +81,5 @@ test('네이티브 HTTP: 미지원·암호·손상 파일은 원본 대기와 0�
  assert.equal(h.db.prepare('SELECT COUNT(*) AS n FROM lots').get().n,0);assert.equal(h.externalCalls(),0);
 });
 test('schema4→5 마이그레이션은 기존 OZD 원본을 보존하고 새 변환표 저장소만 추가',async t=>{
- const h=await harness(t),b=await(await h.upload()).json();const old=h.db.prepare('SELECT sha256,bytes FROM import_documents WHERE batch_id=?').get(b.id);h.db.exec('DROP TABLE import_document_exports; PRAGMA user_version=4;');migrateEnhancements(h.db);assert.equal(h.db.prepare('PRAGMA user_version').get().user_version,5);const after=h.db.prepare('SELECT sha256,bytes FROM import_documents WHERE batch_id=?').get(b.id);assert.deepEqual(after,old);
+ const h=await harness(t),b=await(await h.upload()).json();const old=h.db.prepare('SELECT sha256,bytes FROM import_documents WHERE batch_id=?').get(b.id);h.db.exec('DROP TABLE import_document_exports; PRAGMA user_version=4;');migrateEnhancements(h.db);assert.equal(h.db.prepare('PRAGMA user_version').get().user_version,6);const after=h.db.prepare('SELECT sha256,bytes FROM import_documents WHERE batch_id=?').get(b.id);assert.deepEqual(after,old);
 });

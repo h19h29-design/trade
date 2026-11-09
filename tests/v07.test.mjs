@@ -16,6 +16,11 @@ import {cleanAnswerText} from '../shared/chat-text.mjs';
 import {uid,now} from '../server/db.mjs';
 import {productFingerprint,applySuggestion} from '../server/enhancements.mjs';
 import * as svc from '../server/service.mjs';
+
+test('출처 보기 Markdown 링크도 본문과 복사에서 숨기며 일반 링크는 보존',()=>{
+ for(const input of ['[S1 출처 보기](#source-S1)','[출처 보기](#source-S1)'])assert.equal(cleanAnswerText(input),'');
+ assert.equal(cleanAnswerText('[일반 안내](https://example.invalid)'),'[일반 안내](https://example.invalid)');
+});
 const token='synthetic-bridge-token-at-least-32-characters';
 const bridgeEnv={OZD_LEGACY_BRIDGE_FALLBACK:'true',OZD_BRIDGE_ENABLED:'true',OZD_BRIDGE_APPROVED:'true',OZD_BRIDGE_URL:'http://127.0.0.1:4318/convert',OZD_BRIDGE_TOKEN:token};
 const ozd=Buffer.from('OZP\x00SYNTHETIC_TEST_ONLY_NOT_A_REAL_OZD');

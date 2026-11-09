@@ -39,3 +39,20 @@ test('등록 화면은 URL 설정과 실제 OZ 엔진 준비 여부를 구분하
  const error=await probeOzdBridge({env,fetcher:async()=>{throw Error('secret'+env.OZD_BRIDGE_TOKEN);}});
  assert.equal(error.ready,false);assert(!JSON.stringify(error).includes(env.OZD_BRIDGE_TOKEN));
 });
+
+test('브릿지 health는 엔진문자열에 반사된 비밀값을 전달하지 않음',async()=>{
+ const {probeOzdBridge}=await import('../server/ozd-converter.mjs');
+ const env={OZD_BRIDGE_ENABLED:'true',OZD_BRIDGE_APPROVED:'true',OZD_BRIDGE_URL:'http://127.0.0.1:4318/convert',OZD_BRIDGE_TOKEN:'SYNTHETIC-TOKEN-NOT-REAL-1234567890123456'};
+ for(const engineType of [env.OZD_BRIDGE_TOKEN,'UNRECOGNIZED_ENGINE']){
+  const result=await probeOzdBridge({env,fetcher:async()=>Response.json({ok:true,engineConfigured:true,engineType})});assert.equal(result.ready,false);assert.equal(result.engineType,'');assert.ok(!JSON.stringify(result).includes(env.OZD_BRIDGE_TOKEN));
+ }
+});
+
+test('브릿지 health는 큰 Content-Length와 제한초과 스트림을 즉시 취소',async()=>{
+ const {probeOzdBridge}=await import('../server/ozd-converter.mjs');
+ const env={OZD_BRIDGE_ENABLED:'true',OZD_BRIDGE_APPROVED:'true',OZD_BRIDGE_URL:'http://127.0.0.1:4318/convert',OZD_BRIDGE_TOKEN:'SYNTHETIC-TOKEN-NOT-REAL-1234567890123456'};
+ for(const headers of [{},{'Content-Length':'2049'}]){
+  let cancelled=false;const stream=new ReadableStream({start(c){c.enqueue(new Uint8Array(2049));},cancel(){cancelled=true;}});
+  const result=await probeOzdBridge({env,fetcher:async()=>new Response(stream,{headers})});assert.equal(result.ready,false);assert.equal(cancelled,true);
+ }
+});

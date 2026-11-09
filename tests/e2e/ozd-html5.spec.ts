@@ -8,6 +8,7 @@ import {exportHtml5,html5Status} from '../../tools/ozd-bridge/html5-converter.mj
 import {createOzdBridge} from '../../tools/ozd-bridge/server.mjs';
 import {convertOzd,sha256} from '../../server/ozd-converter.mjs';
 const token='SYNTHETIC_BRIDGE_TOKEN_NOT_A_SECRET_0123456789';
+const browserPath=process.env.OZD_TEST_BROWSER_PATH||chromium.executablePath();
 
 function fakeRuntime(root:string,xlsx:Buffer,malformed=false){
  mkdirSync(root);
@@ -33,7 +34,7 @@ test('OZ HTML5 vendor interface → XLSX export → existing bridge, synthetic l
   const assetDir=join(dir,'licensed-runtime-fixture'),inputPath=join(dir,'input.ozd'),outputPath=join(dir,'output.xlsx');
   fakeRuntime(assetDir,excel);writeFileSync(inputPath,ozd);
   const env={OZD_ENGINE_KIND:'OZ_HTML5',OZD_ENGINE_APPROVED:'true',OZD_HTML5_LICENSE_CONFIRMED:'true',
-    OZD_HTML5_ASSET_DIR:assetDir,OZD_HTML5_BROWSER_PATH:chromium.executablePath(),OZD_HTML5_TIMEOUT_MS:'12000'};
+    OZD_HTML5_ASSET_DIR:assetDir,OZD_HTML5_BROWSER_PATH:browserPath,OZD_HTML5_TIMEOUT_MS:'12000'};
   expect(html5Status(env).ready).toBeTruthy();
   const out=await exportHtml5(inputPath,outputPath,{env});
   expect(out.sha256).toBe(sha256(excel));expect(readFileSync(outputPath).equals(excel)).toBeTruthy();
@@ -53,7 +54,7 @@ test('잘못된 OZ HTML5 SDK 내보내기는 파일 생성 실패로 처리',asy
  try{
   const assetDir=join(dir,'fake-vendor');fakeRuntime(assetDir,Buffer.from('bad'),true);
   const inputPath=join(dir,'input.ozd');writeFileSync(inputPath,Buffer.from('OZP\x03\x00synthetic untrusted'));
-  const env={OZD_ENGINE_APPROVED:'true',OZD_HTML5_LICENSE_CONFIRMED:'true',OZD_HTML5_ASSET_DIR:assetDir,OZD_HTML5_BROWSER_PATH:chromium.executablePath(),OZD_HTML5_TIMEOUT_MS:'3000'};
+  const env={OZD_ENGINE_APPROVED:'true',OZD_HTML5_LICENSE_CONFIRMED:'true',OZD_HTML5_ASSET_DIR:assetDir,OZD_HTML5_BROWSER_PATH:browserPath,OZD_HTML5_TIMEOUT_MS:'3000'};
   await expect(exportHtml5(inputPath,join(dir,'output.xlsx'),{env})).rejects.toThrow();
  }finally{rmSync(dir,{recursive:true,force:true});}
 });

@@ -1,5 +1,7 @@
 # Codex 인계 — v0.6 HTML 기능통합과 조달 API 실제 연결
 
+> **2026-11-03 NAS 통합 검수:** 기존 NAS의 개선사항 schema3와 main 조달 schema3 충돌을 해소해 통합 schema4를 사용합니다. 실제 API·실제 엑셀 검수 및 현재 보존 조건은 [V06_COMPLETION.md](V06_COMPLETION.md), 복구 계획은 [V06_MIGRATION.md](V06_MIGRATION.md), 배포 현황은 [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md)의 최신 기록을 먼저 읽으세요. 아래88개·schema2→3·미실호출 기록은 최초 구현 시점입니다.
+
 아래 지시를 물품이음 저장소의 Codex에서 수행한다. 이 작업은 코드 커밋·검증까지이며 NAS 배포와 real-key 조회는 아직 하지 않았다.
 
 ```text

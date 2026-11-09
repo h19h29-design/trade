@@ -1,5 +1,7 @@
 # v0.9 직접 OZD 변환 검증 — 2026-11-04
 
+> NAS 통합의 실제12,380바이트 사용자 OZD는1행/1개·9셀 독립 대조와 웹 드래그/기존 대기 재변환·조달 실조회를 통과했습니다. 서버150개·빌드·Chrome E2E27개, 통합 schema6 보존 결과는 [V09_COMPLETION.md](V09_COMPLETION.md), 최종 배포/복구는 [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md)의 최신 기록을 먼저 읽으세요. 아래15행/165개·121개/23개·schema5 기록은 main 최초 구현의 공개 표본 검사입니다.
+
 기반 main: 9a538063de3f3e9e560f0c18358104baf78b656e. Node24/Linux/Chromium. 사용자 NAS·DB·키·비공개 문서를 변경하지 않았다.
 
 ## 실파일 검증 (mock 아님)

@@ -1,5 +1,7 @@
 # v0.7.1 후속 검수 기록 · 2026-11-04
 
+> 기존 NAS 통합의 실제 파일/API·세 역할 검수·schema5 보존 결과는 [V071_COMPLETION.md](V071_COMPLETION.md), 최종 배포/백업은 [NAS_DEPLOYMENT.md](NAS_DEPLOYMENT.md)를 먼저 읽으세요. 아래106개/18개·schema4·미실접속 기록은 main 최초 구현 시점입니다.
+
 기반: `80a74466edb3ff987acc6374810cfd090bca2ad7` (v0.7 파일등록·조달정보·대화창 구현). 기존 기능을 재작성하지 않고 후속 오류를 수정했다. 사용자 NAS와 실제 키·파일·업무DB는 변경하지 않았다.
 
 ## 수정 및 회귀 근거
