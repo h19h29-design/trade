@@ -1,3 +1,4 @@
+import {mountAiCore} from './ai-core/routes.mjs';
 import multer from 'multer';
 import {mountDocumentImports} from './document-import.mjs';
 import {createCatalogGateway} from './catalog-gateway.mjs';
@@ -27,6 +28,7 @@ export function applySuggestion(db,user,id,input){const d=z.object({fields:z.arr
 export function mountEnhancements(app,db,{dataDir,env=process.env,fetcher=fetch,imageLoader=referenceImage}={}){
  mountInventoryTools(app,db,{dataDir});
  const catalog=createCatalogGateway(db,{env,fetcher});
+ mountAiCore(app,db,{dataDir,env,fetcher,catalog,applySuggestion,productFingerprint});
  mountDocumentImports(app,db,{env,fetcher});
  const external={env,fetcher},active=new Set(),routes=new Map();let parsing=0;
  const rate=env.SHIPPING_RATE_CARD_JSON?rateCardSchema.parse(JSON.parse(env.SHIPPING_RATE_CARD_JSON)):DEFAULT_RATE_CARD;
