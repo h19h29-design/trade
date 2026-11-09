@@ -7,6 +7,22 @@ import type {FileRecord} from '../types';
 import {STATES} from '../types';
 export function PageHead({title,description,action,back}:{title:string;description?:string;action?:ReactNode;back?:string}){return <header className="page-heading">{back?<a className="back-link" href={'#'+back}><ArrowLeft size={18}/>돌아가기</a>:null}<div className="heading-row"><div><h1>{title}</h1>{description?<p>{description}</p>:null}</div>{action}</div></header>;}
 export function Notice({children,tone='info'}:{children:ReactNode;tone?:'info'|'warning'|'success'}){return <div className={'notice '+tone} role={tone==='warning'?'alert':undefined}>{tone==='success'?<CheckCircle2 size={20}/>:<AlertCircle size={20}/>}<div>{children}</div></div>;}
+// A listing and an inter-institution transfer have separate, independently verified milestones.
+const LOT_STAGES=['등록','게시 검토','나눔 중'];
+const REQUEST_STAGES=['신청','예비 배정','인계','인수','완료'];
+const LOT_AT:Record<string,number>={DRAFT:0,REVIEW:1,PUBLISHED:2,PAUSED:2,CLOSED:2};
+const REQUEST_AT:Record<string,number>={REQUESTED:0,RESERVED:1,SENT:2,RECEIVED:3,DISPUTED:3,DONE:4,DECLINED:0,CANCELLED:0};
+export function Progress({state,compact,kind='lot'}:{state:string;compact?:boolean;kind?:'lot'|'request'}){
+ const stages=kind==='request'?REQUEST_STAGES:LOT_STAGES;
+ const at=(kind==='request'?REQUEST_AT:LOT_AT)[state]??0;
+ const stopped=['DISPUTED'].includes(state),ended=['PAUSED','CLOSED','DECLINED','CANCELLED'].includes(state);
+ const cls=(i:number)=>i<at?'done':i===at?(stopped?'stop':ended?'ended':'now'):'';
+ return compact?<span className="progress-mini" aria-label={kind==='lot'?'물품 게시 진행':'관리전환 진행'}>
+  {stages.map((p,i)=><i key={p} className={cls(i)}/>)}</span>
+  :<ol className="progress" aria-label={(kind==='lot'?'물품 등록·게시':'관리전환')+' 진행: '+(STATES[state]||state)}>
+    {stages.map((p,i)=><li key={p} className={cls(i)} aria-current={i===at?'step':undefined}><i/>{p}</li>)}
+   </ol>;
+}
 export function Badge({state,children}:{state?:string;children?:ReactNode}){return <span className={'badge state-'+(state||'info')}>{children||STATES[state||'']||state}</span>;}
 export function Empty({title='아직 등록된 내용이 없습니다',description,action}:{title?:string;description?:string;action?:ReactNode}){return <section className="empty"><Box size={42}/><h3>{title}</h3><p>{description}</p>{action}</section>;}
 export function Loading(){return <div className="loading" role="status"><LoaderCircle className="spin"/>불러오는 중입니다</div>;}

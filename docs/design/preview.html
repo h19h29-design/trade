@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>물품이음 v0.9 디자인 미리보기</title>
+<style>
+:root{font-family:system-ui,'Malgun Gothic',sans-serif;background:#f6f8f7;color:#19382d}
+*{box-sizing:border-box}
+body{margin:0}header{background:#135e4a;color:white;padding:35px clamp(20px,5vw,70px)}
+h1{font-size:clamp(26px,4vw,40px);margin:0 0 8px}p{line-height:1.7}
+main{max-width:1240px;margin:30px auto;padding:0 20px 60px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}nav a{background:white;border:1px solid #cadece;border-radius:9px;padding:8px 12px;color:#11634e;text-decoration:none}
+section{background:white;border:1px solid #dae7df;border-radius:18px;padding:20px;margin-bottom:22px;box-shadow:0 2px 8px #123a2410}
+section img{width:100%;height:auto;border:1px solid #e2e9e4;border-radius:10px}section h2{margin:0 0 8px;font-size:21px}section p{margin:0 0 15px;color:#596a60}
+.mobile{max-width:390px;margin:12px auto}.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+@media(max-width:750px){.tiles{grid-template-columns:1fr}}small{color:#bbcfc5}
+</style>
+</head>
+<body>
+<header><h1>물품이음 — 새로운 디자인</h1><p>현재 v0.9 기능을 보존하고 디자인 PR #1의 방향을 적용한 화면입니다.</p><small>합성 시연 데이터 · 실제 행정처리 아님 · PR 검토용</small></header>
+<main>
+<nav><a href="#home">홈</a><a href="#market">물품 찾기</a><a href="#detail">상세</a><a href="#assistant">AI 도우미</a><a href="#mobile">모바일</a></nav>
+<section id="home"><h2>01. 오늘 할 일 — 데스크톱</h2><p>업무 건수·진행 상황·이웃 기관 등록물품을 한 화면에서 확인합니다.</p><img src="../screenshots/design-home-desktop.webp" alt="오늘 할 일 홈"></section>
+<section id="market"><h2>02. 물품 찾기</h2><p>검색 및 물품 카드 가독성을 높였습니다.</p><img src="../screenshots/design-market-desktop.webp" alt="물품 찾기"></section>
+<section id="detail"><h2>03. 물품 상세</h2><p>등록·게시 진행 표시와 현물정보, 신청 동선을 분리합니다.</p><img src="../screenshots/design-lot-detail-desktop.webp" alt="물품 상세"></section>
+<section id="assistant"><h2>04. AI 업무도우미</h2><p>일반 대화형 UI를 유지하고 참고자료는 눌렀을 때만 펼칩니다.</p><img src="../screenshots/design-ai-desktop.webp" alt="AI 업무도우미"></section>
+<div id="mobile" class="tiles"><section><h2>05. 모바일 홈</h2><p>하단 홈 탭과 할 일 카드</p><div class="mobile"><img src="../screenshots/design-home-mobile.webp" alt="모바일 홈"></div></section>
+<section><h2>06. 모바일 등록</h2><p>기존 OZD·엑셀 업로드 유지</p><div class="mobile"><img src="../screenshots/design-upload-mobile.webp" alt="모바일 등록"></div></section></div>
+</main></body></html>
