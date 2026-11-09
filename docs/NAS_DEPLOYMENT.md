@@ -410,3 +410,27 @@ NAS 컨테이너에서 `npm ci`·빌드·서버 **40개 테스트**를 통과했
 기존 터널 설정은 `/volume2/docker/trade/deployments/cloudflared-routing-before.yml`에 보존한 뒤 새 hostname 규칙 한 개만 추가했다. 기존 세 규칙은 바이트 단위로 유지했다. 터널 커넥터만 재시작해 적용했고 기존 세 도메인의 응답은 이전과 동일했다. 다른 앱 컨테이너의 ID는 모두 유지됐다. 기존 터널 토큰이나 자격증명은 변경하지 않았다.
 
 이 배포는 **합성 시연용**이다. 기관 운영 승인·외부 API/AI·실제 기관 자료 반입은 포함하지 않는다. 백업복원은 같은 NAS 볼륨 안에서 확인했으며 NAS 전체 장애를 대비한 별도 저장소 백업은 후속 운영 설정이다. Cloudflare가 삽입하려는 통계 스크립트는 기존 CSP가 차단하며, 이를 허용하려고 보안 정책을 완화하지 않았다.
+
+## 실제 배포 결과 — 2026-11-10 v0.10 AI 핵심 기능
+
+**[https://trade.h19h19.com](https://trade.h19h19.com)** 에 v0.10을 배포했다. PR #2를 main에 먼저 병합한 뒤 PR #3의 base를 main으로 바꾸어 CI를 다시 통과시켰고, PR #3 병합 커밋을 그대로 배포했다.
+
+| 항목 | 실제 구성 |
+|---|---|
+| 앱 소스 | `cc2b8828f6c03700bc1a268e0f12754ae3ab55b9` |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:cc2b882` |
+| 이미지 ID | `sha256:d76abc07c06591ad6cd74f158f0448760b083bc181a4372237be9fbef2f91c9c` |
+| 실행 환경 | NAS Linux amd64, Docker 24.0.2, Compose 2.20.1, Node 24 |
+| 소스 / 현재 릴리스 | `/volume2/docker/trade/releases/cc2b882` / `/volume2/docker/trade/current` |
+| DB·업로드 | `/volume2/docker/trade/demo-data/trade.sqlite`, 같은 경로의 `uploads/` |
+| 백업 | `/volume2/docker/trade/backups/2026-11-09T16-55-08.788Z` (첨부 18개) |
+| 검증한 복원 사본 | `/volume2/docker/trade/backups/restore-checks/2026-11-09T16-55-08.788Z` |
+| 접근 / 상태 | 호스트 `127.0.0.1:14310`, `restart=unless-stopped`, `healthy` |
+
+배포 전 백업은 SQLite backup API와 첨부 SHA-256 검증으로 생성했고, 새 경로에 복원해 `integrity_check=ok`, 로그인, 공개 물품 6개, 첨부 18개, 사진 200 응답을 확인했다. 운영 DB·계정·첨부는 배포 전후 모두 12묶음·7계정·18첨부로 동일했다.
+
+새 릴리스는 먼저 NAS Linux 런타임에서 별도 포트로 기동해 `0.10.0`, Hive 실제 검색, AI 비교 설명을 확인한 뒤 컨테이너를 교체했다. 공개 도메인에서도 `0.10.0`, AI core `provider=hive`, `model=deepseek-ai/deepseek-v4.1-flash-1017`, 실제 의자 검색·비교 설명, 조달 식별번호 `20269246` 정확조회를 확인했다. 데스크톱 1440×1000과 모바일 390×844에서 가로 넘침과 페이지 오류가 없었다.
+
+`.env.nas` 원본은 `/volume2/docker/trade/deployments/env.nas.before-cc2b882`에 보존했다. `TRADE_RELEASE=cc2b882`, `AI_CORE_ENABLED=true`, `AI_CORE_DATA_APPROVED=true`, `AI_CORE_DAILY_LIMIT=100`을 반영했으며, 이 승인은 합성 시연·공개 물품 범위에만 해당한다. 실제 기관자료의 외부 전송은 별도 승인이 필요하다. 유효한 카카오 키가 없어 `LOCATION_ENABLED=false`, `ROUTE_ENABLED=false`이며 주소·도로경로는 미연결이다. 기본 배송 단가는 시연용 가정이다.
+
+Docker 엔진 저장소는 `/volume1/@docker`이고 새 이미지 크기는 524MB다. 기존 `mulppum-ieum:92ad038` 이미지와 롤백용 `.env.nas`를 보존했으며 `prune`, `down -v`, DB 삭제·초기화는 수행하지 않았다. 롤백은 `current`를 `releases/92ad038`로 되돌리고 `TRADE_RELEASE=92ad038`로 `up -d --no-build app`을 실행한다.
