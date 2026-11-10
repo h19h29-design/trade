@@ -11,7 +11,7 @@ import {IMPORT_FIELDS} from './excel-parser.mjs';
 
 const configSchema=z.object({sheet:z.string().min(1).max(100),headerRow:z.number().int().min(1).max(30),mapping:z.record(z.string(),z.number().int().min(0).max(63)),groupIdentical:z.boolean().default(false),department:z.string().trim().max(100).default('')});
 export function storeImport(db,user,name,bytes,workbook){business(user);const id=uid();db.prepare('INSERT INTO import_batches VALUES(?,?,?,?,?,?,?)').run(id,user.org_id,user.id,hash(bytes),name,JSON.stringify({...workbook,images:undefined}),now());audit(db,user,'EXCEL_PREVIEW',id,{fileHash:hash(bytes),name});return id;}
-export function loadImport(db,user,id){business(user);const b=db.prepare('SELECT * FROM import_batches WHERE id=? AND org_id=?').get(id,user.org_id);must(b,'본 기관의 업로드를 찾을 수 없습니다.',404);const workbook=JSON.parse(b.workbook);const availability=importAvailability({createdAt:b.created_at,inputFormat:workbook.inputFormat,conversionState:workbook.conversion?.state,readyAt:workbook.conversion?.readyAt});must(!availability.expired,'미리보기가 만료되었습니다. 원본 파일을 다시 올리세요.',410);return {...b,...availability,orgName:db.prepare('SELECT name FROM organizations WHERE id=?').get(user.org_id)?.name,workbook};}
+export function loadImport(db,user,id,{allowExpired=false}={}){business(user);const b=db.prepare('SELECT * FROM import_batches WHERE id=? AND org_id=?').get(id,user.org_id);must(b,'본 기관의 업로드를 찾을 수 없습니다.',404);const workbook=JSON.parse(b.workbook);const availability=importAvailability({createdAt:b.created_at,inputFormat:workbook.inputFormat,conversionState:workbook.conversion?.state,readyAt:workbook.conversion?.readyAt});must(allowExpired||!availability.expired,'미리보기가 만료되었습니다. 원본 파일을 다시 올리세요.',410);return {...b,...availability,orgName:db.prepare('SELECT name FROM organizations WHERE id=?').get(user.org_id)?.name,workbook};}
 export function previewImport(batch,input){
  must(batch.workbook.conversion?.state!=='WAITING','OZD 변환을 완료한 뒤 미리보기와 등록을 진행하세요.',409);
  const config=configSchema.parse(input);const sheet=batch.workbook.sheets.find(s=>s.name===config.sheet);must(sheet,'시트를 확인하세요.');
@@ -72,7 +72,7 @@ export function previewImport(batch,input){
  for(const g of groups.values())if(g.reduce((n,r)=>n+r.quantity,0)>100000)errors.push({row:g[0].rowNumber,messages:['묶음 합계는 100,000개 이내로 나누세요.']});
  return {config,rows,groups:[...groups.values()],errors,warnings,skipped,lotCount:groups.size,totalQuantity:rows.reduce((n,r)=>n+r.quantity,0)};
 }
-export function confirmImport(db,user,batchId,input){business(user);const batch=loadImport(db,user,batchId),plan=previewImport(batch,input);must(!plan.errors.length,'오류 행을 수정한 뒤 다시 가져오세요.');
+export function confirmImport(db,user,batchId,input,{allowExpired=false}={}){business(user);const batch=loadImport(db,user,batchId,{allowExpired}),plan=previewImport(batch,input);must(!plan.errors.length,'오류 행을 수정한 뒤 다시 가져오세요.');
  const requestHash=hash(JSON.stringify([batch.file_hash,plan.config]));
  return transaction(db,()=>{
   const prior=db.prepare('SELECT result FROM import_receipts WHERE org_id=? AND request_hash=?').get(user.org_id,requestHash);if(prior)return {...JSON.parse(prior.result),reused:true};
