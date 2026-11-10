@@ -1,7 +1,7 @@
 /** Additive migrations; never rebuild or reset existing business tables. */
 export function migrateEnhancements(db) {
   const version=Number(db.prepare('PRAGMA user_version').get().user_version);
-  if(version>6)throw new Error('Database version is newer than this application. Do not downgrade.');
+  if(version>7)throw new Error('Database version is newer than this application. Do not downgrade.');
   if(version<2)db.exec(`BEGIN IMMEDIATE;
     CREATE TABLE IF NOT EXISTS import_batches(
       id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES organizations(id),
@@ -112,4 +112,17 @@ export function migrateEnhancements(db) {
     catch(error){db.exec('ROLLBACK');throw error;}
   }
 
+  if(version<7){
+    db.exec('BEGIN IMMEDIATE');
+    try{db.exec(`CREATE TABLE IF NOT EXISTS registration_previews(
+      batch_id TEXT PRIMARY KEY REFERENCES import_batches(id),org_id TEXT NOT NULL REFERENCES organizations(id),
+      file_hash TEXT NOT NULL,config TEXT NOT NULL,plan_hash TEXT NOT NULL,items TEXT NOT NULL CHECK(json_valid(items)),
+      version INTEGER NOT NULL DEFAULT 1,state TEXT NOT NULL DEFAULT 'PREVIEW' CHECK(state IN ('PREVIEW','COMPLETE')),
+      receipt TEXT NOT NULL DEFAULT '{}',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS registration_preview_images(
+      batch_id TEXT NOT NULL REFERENCES registration_previews(batch_id),item_key TEXT NOT NULL,
+      bytes BLOB NOT NULL,sha256 TEXT NOT NULL,source_url TEXT NOT NULL,reference_url TEXT NOT NULL,
+      identifier TEXT NOT NULL,PRIMARY KEY(batch_id,item_key));
+      PRAGMA user_version=7;`);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
+  }
 }

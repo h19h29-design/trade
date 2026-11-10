@@ -1,3 +1,7 @@
+> **v0.11 검토용 코드:** [트럭 적재·확인 후 등록](docs/PACKING_REVIEW_V011.md) · [Codex 마무리](docs/CODEX_PACKING_REVIEW_HANDOFF.md) · [검증](docs/PACKING_REVIEW_TEST_REPORT.md)
+> 예시 운임 + 트럭 배치 계산. 새 AI 등록 화면은 분석 결과만 보관하고 **확인하고 등록** 후 실제 비공개 물품을 생성합니다.
+> 아래 운영 배포 기록과 구분하세요. v0.11은 아직 운영 NAS에 배포하지 않았습니다.
+
 > **v0.10 AI 중심 기능:** [설계·RAG·설정](docs/AI_CORE_V010.md) · [Codex 마무리](docs/CODEX_AI_CORE_V010_HANDOFF.md) · [검증 범위](docs/AI_CORE_TEST_REPORT.md)
 >
 > ‘오늘 할 일’ 대신 **AI 물품검색·AI 물품등록·AI 업무도우미**가 주요 화면입니다.

@@ -1,3 +1,5 @@
+import {mountPreviewRegistration} from './ai-core/preview-registration.mjs';
+import {estimatePacking} from './truck-packing.mjs';
 import {mountAiCore} from './ai-core/routes.mjs';
 import multer from 'multer';
 import {mountDocumentImports} from './document-import.mjs';
@@ -28,11 +30,13 @@ export function applySuggestion(db,user,id,input){const d=z.object({fields:z.arr
 export function mountEnhancements(app,db,{dataDir,env=process.env,fetcher=fetch,imageLoader=referenceImage}={}){
  mountInventoryTools(app,db,{dataDir});
  const catalog=createCatalogGateway(db,{env,fetcher});
+ mountPreviewRegistration(app,db,{env,fetcher,catalog,imageLoader});
  mountAiCore(app,db,{dataDir,env,fetcher,catalog,applySuggestion,productFingerprint});
  mountDocumentImports(app,db,{env,fetcher});
  const external={env,fetcher},active=new Set(),routes=new Map();let parsing=0;
  const rate=env.SHIPPING_RATE_CARD_JSON?rateCardSchema.parse(JSON.parse(env.SHIPPING_RATE_CARD_JSON)):DEFAULT_RATE_CARD;
  const guard=(user,kind,limit=60)=>{svc.business(user);const since=new Date(Date.now()-3600000).toISOString();const n=db.prepare('SELECT COUNT(*) AS n FROM audit_events WHERE actor_id=? AND action=? AND created_at>?').get(user.id,kind,since).n;must(n<limit,'이 기능의 시간당 호출 한도를 넘었습니다.',429);audit(db,user,kind,user.id);};
+ app.post('/api/shipping/packing',(req,res)=>{guard(req.user,'PACKING_ESTIMATE',180);res.json(estimatePacking(req.body,rate));});
  app.get('/api/assistant/status',(req,res)=>{res.json({...providerStatus(env),shipping:{rateVersion:rate.version,sample:rate.sample},excel:{extensions:['xlsx','xls'],maxRows:2000,maxBytes:8388608}});});
  const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024,files:1,fields:0}});
  app.post('/api/imports/excel',upload.single('file'),async(req,res)=>{

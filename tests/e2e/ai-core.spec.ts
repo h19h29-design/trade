@@ -16,19 +16,27 @@ test('AI 중심 첫화면: 오늘 할 일 제거·상단 세 기능·근거접�
  await expect(page.locator('.ai-evidence[open]')).toHaveCount(0);await page.getByTestId('ai-result').first().locator('summary').click();await expect(page.locator('.ai-score-parts').first()).toBeVisible();
  await page.screenshot({path:'test-results/ai-search-desktop.png',fullPage:true});
 });
-test('OZD 하나 드래그로 자동등록·원본 폐품 보존·중복없음·이력 재개',async({page})=>{
- await signIn(page,'staff1@demo.local');await hash(page,'/ai-register');await expect(page.getByRole('heading',{name:'AI 물품등록',exact:true})).toBeVisible();await drop(page,autoOzd(),'합성_자동등록.ozd');
- await expect(page.getByText('자동 등록 완료 · 현물·증빙 확인 필요',{exact:true})).toBeVisible({timeout:30000});await expect(page.locator('.ai-import-row')).toHaveCount(2);await expect(page.locator('.ai-import-status')).toContainText('초안 2묶음');
- const links=await page.locator('.ai-import-row>a').evaluateAll(a=>a.map(n=>n.getAttribute('href')));
+test('OZD 분석 후 담당자 확인 때만 등록·원본 폐품 보존·완료 이력',async({page})=>{
+ await signIn(page,'staff1@demo.local');const before=(await(await page.request.get('/api/lots?mine=true')).json()).length;
+ await hash(page,'/ai-register');await drop(page,autoOzd(),'합성_자동등록.ozd');
+ await expect(page.getByText('아직 등록되지 않았습니다',{exact:true})).toBeVisible({timeout:30000});
+ await expect(page.getByTestId('confirm-registration')).toBeEnabled({timeout:30000});
+ await expect(page.locator('.registration-card')).toHaveCount(2);
+ expect((await(await page.request.get('/api/lots?mine=true')).json()).length).toBe(before);
  await page.screenshot({path:'test-results/ai-registration-desktop.png',fullPage:true});
- await drop(page,autoOzd(),'합성_자동등록.ozd');await expect(page.getByText('자동 등록 완료 · 현물·증빙 확인 필요',{exact:true})).toBeVisible({timeout:30000});
- expect(await page.locator('.ai-import-row>a').evaluateAll(a=>a.map(n=>n.getAttribute('href')))).toEqual(links);
- await page.locator('.ai-import-row>a').first().click();await expect(page.getByText('비공개 작성',{exact:true})).toBeVisible();
- const path=new URL(page.url()).hash.slice(1).replace(/\/edit$/,'');const row=await (await page.request.get('/api'+path)).json();expect(row.state).toBe('DRAFT');expect(row.sourceSummary.rows[0].condition).toBe('폐품');
+ await page.locator('.registration-source summary').click();
+ const sourceHref=await page.getByRole('link',{name:'원본 받기'}).getAttribute('href');
+ await page.getByTestId('confirm-registration').click();await expect(page.getByTestId('registration-completed')).toBeVisible();
+ expect((await(await page.request.get('/api/lots?mine=true')).json()).length).toBe(before+2);
+ const link=await page.getByRole('link',{name:'1번 물품·현물사진 확인'}).getAttribute('href');
+ await page.goto('/#/ai-register/'+sourceHref!.split('/')[3]);await expect(page.getByTestId('registration-completed')).toBeVisible();
+ await page.getByRole('link',{name:'1번 물품·현물사진 확인'}).click();await expect(page.getByText('비공개 작성',{exact:true})).toBeVisible();
+ const row=await(await page.request.get('/api'+link!.slice(1).replace(/\/edit$/,''))).json();expect(row.state).toBe('DRAFT');expect(row.sourceSummary.rows[0].condition).toBe('폐품');
 });
-test('AI 엑셀등록도 수동확인 버튼 없이 원본 초안 생성',async({page})=>{
+test('엑셀도 분석결과 확인 후에만 실제 초안을 생성',async({page})=>{
  await signIn(page,'staff1@demo.local');await hash(page,'/ai-register');await page.getByTestId('ai-document-upload').setInputFiles({name:'합성_자동등록.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:demandWorkbook()});
- await expect(page.getByText('자동 등록 완료 · 현물·증빙 확인 필요',{exact:true})).toBeVisible({timeout:30000});await expect(page.locator('.ai-import-row')).toHaveCount(1);await expect(page.locator('.ai-import-row')).toContainText('원본으로 등록');
+ await expect(page.locator('.registration-card')).toHaveCount(1,{timeout:30000});await expect(page.getByTestId('confirm-registration')).toBeEnabled({timeout:30000});
+ await page.getByTestId('confirm-registration').click();await expect(page.getByTestId('registration-completed')).toContainText('1묶음');
 });
 test('AI 검색 없는물품·잘못된업로드·모바일 390px',async({page})=>{
  await page.setViewportSize({width:390,height:844});await signIn(page);await page.getByLabel('찾는 물품과 사용 조건').fill('우주선용 플라즈마 분광기');await page.getByRole('button',{name:'조건에 맞게 찾아줘'}).click();await expect(page.getByText('조건에 맞는 후보 0건',{exact:true})).toBeVisible();
