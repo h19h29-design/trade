@@ -1,0 +1,29 @@
+name: Publish reviewed packing and registration source
+on:
+  push:
+    branches: [build/packing-review-transfer-20261110]
+permissions:
+  contents: write
+jobs:
+  import-reviewed-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify pinned source bundle and publish feature branch only
+        env:
+          BUNDLE_URL: https://sb-74dr69nijde4.vercel.run/trade-packing-review.bundle
+          BUNDLE_SHA256: 32d1a8d1718f6ff7587d9688fae6706e7f06549e3597d28bbffa5ba64964a8d7
+          BASE_SHA: c847085888b0cba06e0544ba820b913f9dc08da0
+          RELEASE_SHA: e095b91c1f1046b8b3b818dd2efeeee3ea00eabd
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 40 "$BUNDLE_URL" -o /tmp/trade-reviewed.bundle
+          echo "$BUNDLE_SHA256  /tmp/trade-reviewed.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-reviewed.bundle
+          git fetch /tmp/trade-reviewed.bundle refs/heads/codex/packing-review-20261110
+          test "$(git rev-parse FETCH_HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse FETCH_HEAD^)" = "$BASE_SHA"
+          git push origin "$RELEASE_SHA:refs/heads/codex/packing-review-20261110"
