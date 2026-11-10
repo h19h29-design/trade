@@ -434,3 +434,18 @@ NAS 컨테이너에서 `npm ci`·빌드·서버 **40개 테스트**를 통과했
 `.env.nas` 원본은 `/volume2/docker/trade/deployments/env.nas.before-cc2b882`에 보존했다. `TRADE_RELEASE=cc2b882`, `AI_CORE_ENABLED=true`, `AI_CORE_DATA_APPROVED=true`, `AI_CORE_DAILY_LIMIT=100`을 반영했으며, 이 승인은 합성 시연·공개 물품 범위에만 해당한다. 실제 기관자료의 외부 전송은 별도 승인이 필요하다. 유효한 카카오 키가 없어 `LOCATION_ENABLED=false`, `ROUTE_ENABLED=false`이며 주소·도로경로는 미연결이다. 기본 배송 단가는 시연용 가정이다.
 
 Docker 엔진 저장소는 `/volume1/@docker`이고 새 이미지 크기는 524MB다. 기존 `mulppum-ieum:92ad038` 이미지와 롤백용 `.env.nas`를 보존했으며 `prune`, `down -v`, DB 삭제·초기화는 수행하지 않았다. 롤백은 `current`를 `releases/92ad038`로 되돌리고 `TRADE_RELEASE=92ad038`로 `up -d --no-build app`을 실행한다.
+
+## 자동등록 복합 상태 라벨 배포 — 2026-11-10
+
+자동등록 결과에서 조달번호 일치와 AI 원문 보완이 모두 적용된 물품을 한눈에 구분하도록 `조달번호 일치 · AI 원문 보완` 복합 라벨을 추가했다.
+
+| 항목 | 실제 구성 |
+|---|---|
+| 앱 소스 | `5bb6c3254f517c54e1f40bc609033c38fff363ff` |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:5bb6c32` |
+| 이미지 ID | `sha256:bcbab01498b176a7b401b3f23e3d0c2cc0325bf59b8087c629af737279c06722` |
+| 릴리스 | `/volume2/docker/trade/releases/5bb6c32` |
+| 환경 백업 | `/volume2/docker/trade/deployments/env.nas.before-5bb6c32` |
+| 롤백 기준 | `current-before-5bb6c32.txt`, 이전 이미지 `mulppum-ieum:cc2b882` 보존 |
+
+서버 단위 테스트 167개·빌드·Chrome E2E 32개가 통과했고, 실제 공개 OZD 15행에서 복합 라벨 5건·조달번호만 일치 10건을 확인했다. 운영 DB·계정·첨부는 12묶음·7계정·18첨부로 배포 전과 동일하고, 컨테이너는 healthy다.
