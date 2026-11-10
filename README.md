@@ -1,6 +1,7 @@
 > **v0.11 검토용 코드:** [트럭 적재·확인 후 등록](docs/PACKING_REVIEW_V011.md) · [Codex 마무리](docs/CODEX_PACKING_REVIEW_HANDOFF.md) · [검증](docs/PACKING_REVIEW_TEST_REPORT.md)
 > 예시 운임 + 트럭 배치 계산. 새 AI 등록 화면은 분석 결과만 보관하고 **확인하고 등록** 후 실제 비공개 물품을 생성합니다.
-> 아래 운영 배포 기록과 구분하세요. v0.11은 아직 운영 NAS에 배포하지 않았습니다.
+>
+> **2026-11-10 v0.11 운영 배포:** [https://trade.h19h19.com](https://trade.h19h19.com), 앱 소스 `9c7bb139101bc672b083ac721b73a4a8672d9169`, 이미지 `mulppum-ieum:9c7bb13`. schema6→7 마이그레이션, 서버181개·빌드·Chrome E2E35개, 실제 공개 OZD 15행·엑셀 20행 확인 후 등록, 트럭 적재·혼합·회전·쌓기·초과·2,000개 한도를 검증했습니다.
 
 > **v0.10 AI 중심 기능:** [설계·RAG·설정](docs/AI_CORE_V010.md) · [Codex 마무리](docs/CODEX_AI_CORE_V010_HANDOFF.md) · [검증 범위](docs/AI_CORE_TEST_REPORT.md)
 >
