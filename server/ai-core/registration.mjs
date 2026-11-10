@@ -72,7 +72,7 @@ export async function enrichRegisteredLot(db,user,id,options){
   if(category!=='OTHER'){svc.saveLot(db,user,{...draft,category,version:row.version},id);appliedFields.push('category');}
  }
  const final=svc.ownLot(db,user,id);
- const result={id,title:JSON.parse(final.data).title,state:exact?'CATALOG_MATCHED':aiExtracted?'AI_EXTRACTED':candidates.length?'REVIEW_CANDIDATES':'SOURCE_ONLY',appliedFields:[...new Set(appliedFields)],notes,referenceCandidateCount:candidates.length,privateDraft:true};
+ const result={id,title:JSON.parse(final.data).title,state:exact?'CATALOG_MATCHED':aiExtracted?'AI_EXTRACTED':candidates.length?'REVIEW_CANDIDATES':'SOURCE_ONLY',catalogMatched:exact,aiApplied:aiExtracted,appliedFields:[...new Set(appliedFields)],notes,referenceCandidateCount:candidates.length,privateDraft:true};
  audit(db,user,'AI_REGISTRATION_DONE',id,{version:final.version,aiRequested:Boolean(consent&&useAi),catalogConfigured:providerStatus(env).procurement.configured,transientFailure,result});
  return result;
 }
