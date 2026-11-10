@@ -449,3 +449,26 @@ Docker 엔진 저장소는 `/volume1/@docker`이고 새 이미지 크기는 524M
 | 롤백 기준 | `current-before-5bb6c32.txt`, 이전 이미지 `mulppum-ieum:cc2b882` 보존 |
 
 서버 단위 테스트 167개·빌드·Chrome E2E 32개가 통과했고, 실제 공개 OZD 15행에서 복합 라벨 5건·조달번호만 일치 10건을 확인했다. 운영 DB·계정·첨부는 12묶음·7계정·18첨부로 배포 전과 동일하고, 컨테이너는 healthy다.
+
+## 실제 배포 결과 — 2026-11-10 v0.11 트럭 적재·확인 후 등록
+
+**[https://trade.h19h19.com](https://trade.h19h19.com)** 에 v0.11을 배포했다. schema6→7 마이그레이션 전에 운영 앱만 잠시 중지해 DB·uploads·rag-usage·RAG corpus를 일관되게 백업했고, 별도 복원 사본에서 새 코드로 schema7을 먼저 기동해 검증했다.
+
+| 항목 | 실제 구성 |
+|---|---|
+| 앱 소스 | `9c7bb139101bc672b083ac721b73a4a8672d9169` |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:9c7bb13` |
+| 이미지 ID | `sha256:63fa52c1565e7a3183fa704c53286a5123554b60dee94f674776efc002d5e759` |
+| 릴리스 | `/volume2/docker/trade/releases/9c7bb13` |
+| 백업 | `/volume2/docker/trade/backups/2026-11-10T07-49-03Z-v011-pre` (schema6, 13묶음·8자산·6등록행·7계정·18첨부, RAG 129파일) |
+| 검증한 복원 사본 | `/volume2/docker/trade/backups/restore-checks/2026-11-10T07-49-03Z-v011-schema7` |
+| 환경 백업 | `/volume2/docker/trade/deployments/env.nas.before-v011` |
+| 상태 | running·healthy, schema7, `integrity_check=ok`, 참조 오류 0 |
+
+복원 사본을 새 v0.11 코드로 기동해 기존 27개 테이블의 행 수·해시가 동일하고 `registration_previews`/`registration_preview_images`만 추가됐음을 확인했다. 실제 운영 DB도 schema7로 전환된 뒤 13묶음·8자산·6등록행·7계정·18첨부가 그대로였고, 새 preview 테이블은 0건이었다. RAG는 121문서/8,164구간을 유지했다.
+
+실제 공개 OZD 15행/165개와 실제 비식별 엑셀 20행/134개를 별도 복제본에서 검수했다. 분석·조달/AI 보완·부분 수정 단계의 lots/assets/imported_rows는 0건 증가했고, 확인하고 등록 후 각각 15묶음·20묶음이 비공개 초안으로 생성됐다. 원본 행 대조는 15/15·20/20 통과했고, 낡은 버전 409·동일 원본 재업로드 409·완료 후 재확인 reused를 확인했다.
+
+조달 참고사진은 정확번호 후보 10건을 임시 저장하고 담당자가 1건을 선택 취소해 9건만 연결했다. `files`/PHOTO 증빙은 증가하지 않았다. 트럭 UI는 기본 20개/1회/111,000~180,000원, 200개/10회, 혼합 205개/11회, 쌓기 105개/3회, 100km/3회로 자동 갱신했고, 높이·중량 초과는 예시 차량 없음, 2,001개·13종은 400으로 거부했다. 모든 금액은 예시 운임이며 `binding=false`다.
+
+공개 도메인에서 `0.11.0`, Hive `deepseek-ai/deepseek-v4.1-flash-1017`, 조달 식별번호 `20269246`, RAG 121/8,164, packing API와 데스크톱 1440px·모바일 390px 화면을 확인했다. 모바일 결과 카드의 텍스트 열 깨짐도 수정해 가로 넘침 없이 표시된다. 기존 이미지 `mulppum-ieum:5bb6c32`와 환경파일 백업은 롤백용으로 보존했으며 `prune`, `down -v`, DB 삭제·초기화는 수행하지 않았다.
