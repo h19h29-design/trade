@@ -41,6 +41,18 @@ test('조달번호 보완·참고사진도 확정 전 실제 물품/현물사진
  await enrichPreview(f.db,f.editor,id,options);assert.equal(count(f),0);let p=previewStatus(f.db,f.editor,id);assert.equal(p.items[0].fields.manufacturer,'시험제조사');assert.ok(p.items[0].referencePhoto);
  const done=confirmPreview(f.db,f.editor,id,{version:p.version,confirmed:true}),lot=getLot(f.db,f.editor,done.receipt.lotIds[0]);assert.equal(lot.hasCatalogImage,true);assert.equal(lot.photos.length,0);assert.equal(lot.state,'DRAFT');
 }finally{f.db.close();}});
+test('조달 제조사 값이 표시 품명과 같은 일반명이면 preview에서 자동 입력하지 않음',async()=>{const f=fixture();try{
+ const id=file(f);preparePreview(f.db,f.editor,id);
+ const env={PROCUREMENT_ENABLED:'true',DATA_GO_KR_SERVICE_KEY:'FAKE_TEST'};const catalog={search:async()=>({candidates:[{matchType:'EXACT_IDENTIFIER',actualIdentificationCode:'00001234',manufacturer:'회의용 책상',model:'T-100',description:'시험 설명'}]})};
+ await enrichPreview(f.db,f.editor,id,{env,catalog,consent:false});const p=previewStatus(f.db,f.editor,id);assert.equal(p.items[0].fields.manufacturer,'');assert.equal(p.items[0].fields.model,'T-100');assert.equal(count(f),0);
+}finally{f.db.close();}});
+test('조달 참고사진 이용조건이 확인되지 않으면 preview에 사진을 저장하지 않음',async()=>{const f=fixture();try{
+ const id=file(f);preparePreview(f.db,f.editor,id);
+ const env={PROCUREMENT_ENABLED:'true',DATA_GO_KR_SERVICE_KEY:'FAKE_TEST',PROCUREMENT_IMAGE_RIGHTS_CONFIRMED:'false'};
+ const catalog={search:async()=>({candidates:[{matchType:'EXACT_IDENTIFIER',actualIdentificationCode:'00001234',manufacturer:'시험제조사',model:'T-100',description:'시험 설명',imageUrl:'https://g2b.go.kr/test.jpg',sourceUrl:'https://g2b.go.kr/'}]})};
+ await enrichPreview(f.db,f.editor,id,{env,catalog,imageLoader:async()=>Buffer.from('must-not-be-used'),consent:false});
+ const p=previewStatus(f.db,f.editor,id);assert.equal(p.items[0].referencePhoto,null);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM registration_preview_images').get().n,0);assert.equal(count(f),0);
+}finally{f.db.close();}});
 test('API 응답 중 담당자 수정 시 이전 분석을 덮어쓰지 않고 실제 물품 0개',async()=>{const f=fixture();try{
  const id=file(f);const p=preparePreview(f.db,f.editor,id);
  await assert.rejects(()=>enrichPreview(f.db,f.editor,id,{env:{PROCUREMENT_ENABLED:'true',DATA_GO_KR_SERVICE_KEY:'FAKE'},catalog:{search:async()=>{editPreview(f.db,f.editor,id,'0',{version:p.version,fields:{model:'수정 모델'}});return {candidates:[]};}}}),/수정/);

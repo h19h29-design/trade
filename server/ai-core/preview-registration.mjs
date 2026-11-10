@@ -10,6 +10,8 @@ import {referenceImage} from '../reference-image.mjs';
 import {registrationLots} from './registration.mjs';
 const hash=x=>createHash('sha256').update(x).digest('hex');
 const stringify=x=>JSON.stringify(x);
+const normalized=s=>String(s||'').normalize('NFKC').replace(/[^0-9a-z가-힣]/gi,'').toLowerCase();
+const genericManufacturer=(value,item,exact)=>[item.fields.title,item.originalRows?.[0]?.name,exact?.classificationName].some(x=>normalized(x)&&normalized(x)===normalized(value));
 const prepareSchema=z.object({department:z.string().trim().max(100).default('')}).strict();
 const editableSchema=z.object({title:z.string().trim().min(2).max(100).optional(),manufacturer:z.string().trim().max(200).optional(),model:z.string().trim().max(200).optional(),
  specification:z.string().trim().max(500).optional(),description:z.string().trim().max(4000).optional(),department:z.string().trim().max(100).optional(),
@@ -63,7 +65,7 @@ export async function enrichPreview(db,user,id,{cursor=0,consent=false,useAi=tru
  if(providerStatus(env).procurement.configured){
   try{const code=item.identificationCode;const results=(await catalog.search(user,code?{identificationCode:code}:{name:item.fields.title})).candidates;
    const matches=results.filter(c=>c.matchType==='EXACT_IDENTIFIER'&&c.actualIdentificationCode===code);
-   if(matches.length===1){exact=matches[0];for(const k of ['manufacturer','model','description'])if(!item.fields[k]&&exact[k]&&!item.edited.includes(k)){item.fields[k]=exact[k];item.provenance[k]='조달청 번호 일치';}
+   if(matches.length===1){exact=matches[0];for(const k of ['manufacturer','model','description'])if(!item.fields[k]&&exact[k]&&!item.edited.includes(k)&&!(k==='manufacturer'&&genericManufacturer(exact[k],item,exact))){item.fields[k]=exact[k];item.provenance[k]='조달청 번호 일치';}
     item.notes.push('조달번호 일치 · 현물 명판은 담당자 확인');
     const count=db.prepare('SELECT COUNT(*) n FROM registration_preview_images WHERE batch_id=?').get(id).n;
     if(exact.imageUrl&&env.PROCUREMENT_IMAGE_RIGHTS_CONFIRMED==='true'&&count<10){try{imageBytes=await imageLoader(exact.imageUrl);must(Buffer.isBuffer(imageBytes)&&imageBytes.length<=4*1024*1024,'참고사진 크기 오류');item.referencePhoto={sourceUrl:exact.sourceUrl,label:'조달 참고사진 · 실제 현물 아님'};if(!item.edited.includes('useReferencePhoto'))item.useReferencePhoto=true;}catch{item.notes.push('참고사진 조회 실패 · 현물사진을 첨부하세요.');}}
@@ -73,7 +75,7 @@ export async function enrichPreview(db,user,id,{cursor=0,consent=false,useAi=tru
  const client=modelClient(db,user,{env,fetcher,consent});
  if(useAi&&consent&&coreReady(client.config)&&['manufacturer','model','description'].some(k=>!item.fields[k])){
   try{const source=[item.sourceText,exact?.description].filter(Boolean).join('\n');const meta=await extractMetadata(client,source);
-   for(const k of ['manufacturer','model','description'])if(!item.fields[k]&&meta[k]&&!item.edited.includes(k)){item.fields[k]=meta[k];item.provenance[k]='AI 원문 발췌';}
+   for(const k of ['manufacturer','model','description'])if(!item.fields[k]&&meta[k]&&!item.edited.includes(k)&&!(k==='manufacturer'&&genericManufacturer(meta[k],item,exact))){item.fields[k]=meta[k];item.provenance[k]='AI 원문 발췌';}
   }catch{item.notes.push('AI 보완 미완료 · 원본 정보 유지');}
  }
  item.enriched=true;
