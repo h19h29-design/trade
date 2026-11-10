@@ -11,6 +11,7 @@ import {makeOzd} from './fixtures/native-ozd.mjs';
 import {inferCriteria,retrieve,rankCandidate,WEIGHTS} from '../server/ai-core/ranking.mjs';
 import {deliveryFor} from '../server/ai-core/delivery.mjs';
 import {coreConfig,coreReady,extractMetadata,modelClient} from '../server/ai-core/model.mjs';
+import {registrationLabel} from '../shared/ai-registration-label.mjs';
 const key='SYNTHETIC_NOT_A_REAL_KEY';
 const enabled={RAG_AI_ENABLED:'true',RAG_EXTERNAL_APPROVED:'true',DEEPSEEK_API_KEY:key,AI_CORE_DATA_APPROVED:'true'};
 const apiJson=value=>new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
@@ -96,6 +97,16 @@ test('조달 제조사 값이 품명과 같은 일반명이면 자동 입력하�
  const h=await http(t,{env:procurement,fetcher:async()=>apiJson({response:{header:{resultCode:'00'},body:{items:[{prdctIdntNo:'00001234',krnPrdctNm:'회의 의자',mnfctCorpNm:'회의 의자',prdctClsfcNoNm:'의자',useYn:'Y'}]}}})});
  const u=await(await h.upload(workbook())).json();const receipt=await(await h.call('/ai-core/register/'+u.id+'/start')).json();await h.call('/ai-core/register/'+u.id+'/enrich',{data:{useAi:false}});
  const d=JSON.parse(h.db.prepare('SELECT data FROM lots WHERE id=?').get(receipt.lotIds[0]).data);assert.equal(d.manufacturer,'');assert.equal(d.classificationName,'의자');
+});
+test('조달 일치와 AI 원문 보완이 함께 적용되면 두 상태를 모두 반환',async t=>{
+ const h=await http(t,{env:{...enabled,...procurement},fetcher:async(url)=>String(url).includes('api.deepseek.com')?modelJson({manufacturer:'데모제조사',model:'C100',descriptionParts:['회의 의자']}):catalogJson()});
+ const u=await(await h.upload(workbook())).json();const receipt=await(await h.call('/ai-core/register/'+u.id+'/start')).json();const j=await(await h.call('/ai-core/register/'+u.id+'/enrich',{data:{useAi:true,consent:true}})).json();
+ const item=j.items[0];assert.equal(item.state,'CATALOG_MATCHED');assert.equal(item.catalogMatched,true);assert.equal(item.aiApplied,true);assert.ok(item.appliedFields.includes('model'));
+});
+test('자동등록 상태 라벨은 조달번호와 AI 보완을 함께 표시',()=>{
+ assert.equal(registrationLabel({state:'CATALOG_MATCHED',aiApplied:true}),'조달번호 일치 · AI 원문 보완');
+ assert.equal(registrationLabel({state:'CATALOG_MATCHED',aiApplied:false}),'조달번호 일치');
+ assert.equal(registrationLabel({state:'AI_EXTRACTED'}),'AI 원문 보완');
 });
 test('자료의 기관별 격리 및 잘못된 자동 매핑 시 0건 생성',async t=>{
  const h=await http(t);const u=await(await h.upload(workbook())).json();const other=await h.login('third');assert.equal((await h.call('/ai-core/register/'+u.id+'/start',{session:other})).status,404);

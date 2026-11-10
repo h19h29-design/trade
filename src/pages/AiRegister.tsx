@@ -6,11 +6,11 @@ import {PageHead,Notice,Field,ErrorBox} from '../components/UI';
 import DropArea from '../components/DropArea';
 import ExcelImport from '../features/ExcelImport';
 import type {CoreStatus} from '../features/ai-core/types';
+import {registrationLabel} from '../../shared/ai-registration-label.mjs';
 interface Source {registeredCount?:number;id:string;name:string;inputFormat?:string;conversion?:{state:string;method?:string;message?:string;summary?:{rows:number;totalQuantity:number}}}
 interface Receipt {lotIds:string[];lotCount:number;totalQuantity:number;rows:number;reused:boolean;warnings:string[]}
-interface Item {id:string;title?:string;state:string;appliedFields:string[];notes:string[];reused?:boolean}
+interface Item {id:string;title?:string;state:string;catalogMatched?:boolean;aiApplied?:boolean;appliedFields:string[];notes:string[];reused?:boolean}
 interface Batch {items:Item[];nextCursor:number;done:boolean;total:number}
-const LABEL:Record<string,string>={CATALOG_MATCHED:'조달번호 일치',AI_EXTRACTED:'AI 원문 보완',REVIEW_CANDIDATES:'후보 선택 필요',SOURCE_ONLY:'원본으로 등록',SKIPPED:'변경된 초안 보존',RETRY:'다시 확인 필요'};
 export default function AiRegister({resumeId}:{resumeId?:string}){
  const {data:status}=useResource<CoreStatus>('/ai-core/status');
  const [source,setSource]=useState<Source|null>(null),[receipt,setReceipt]=useState<Receipt|null>(null),[items,setItems]=useState<Item[]>([]),[busy,setBusy]=useState(false),[stage,setStage]=useState('파일을 올려 주세요'),[error,setError]=useState(''),[consent,setConsent]=useState(false),[department,setDepartment]=useState(''),[cursor,setCursor]=useState(0),[total,setTotal]=useState(0),[manual,setManual]=useState(false),[finished,setFinished]=useState(false);
@@ -54,7 +54,7 @@ export default function AiRegister({resumeId}:{resumeId?:string}){
  </section>:null}
  {error?<ErrorBox message={error}/>:null}
  {receipt?.warnings.length?<details className="ai-evidence"><summary>원본 검증 안내 {receipt.warnings.length}건</summary>{receipt.warnings.map((w,i)=><p key={i}>{w}</p>)}</details>:null}
- {items.length?<section className="ai-import-results"><h2>물품별 등록 결과</h2>{items.map(item=><article className="ai-import-row" key={item.id}><CheckCircle2 size={22}/><div><h3>{item.title||'등록된 물품'}</h3><span>{LABEL[item.state]||item.state} {item.reused?'· 기존 결과 보존':''}</span><details><summary>정보 출처·확인 사항</summary>{item.notes.map((n,i)=><p key={i}>{n}</p>)}<p>원본·현물 상태·게시승인은 자동 변경하지 않았습니다.</p></details></div><a className="button secondary compact" href={'#/lots/'+item.id+'/edit'}>현물·증빙 확인 <ArrowUpRight size={16}/></a></article>)}</section>:null}
+ {items.length?<section className="ai-import-results"><h2>물품별 등록 결과</h2>{items.map(item=><article className="ai-import-row" key={item.id}><CheckCircle2 size={22}/><div><h3>{item.title||'등록된 물품'}</h3><span>{registrationLabel(item)} {item.reused?'· 기존 결과 보존':''}</span><details><summary>정보 출처·확인 사항</summary>{item.notes.map((n,i)=><p key={i}>{n}</p>)}<p>원본·현물 상태·게시승인은 자동 변경하지 않았습니다.</p></details></div><a className="button secondary compact" href={'#/lots/'+item.id+'/edit'}>현물·증빙 확인 <ArrowUpRight size={16}/></a></article>)}</section>:null}
  {source&&manual&&!busy?<section className="ai-manual-recovery"><h2>원본 열·사진을 확인하며 이어가기</h2><ExcelImport resumeId={source.id} onDone={()=>{setStage('수동 검증 초안 저장 완료 · 정보 보완을 계속할 수 있습니다');}}/><button className="button secondary" onClick={()=>void run(()=>enrich(source.id,0))}><Sparkles size={17}/>저장한 초안 정보 보완</button></section>:null}
  <p className="fineprint">사진 자동 연결은 현물·개인정보 확인을 거쳐야 합니다. 품명으로만 찾은 조달 후보는 잘못된 코드 등록을 막기 위해 담당자 선택으로 남깁니다. 이동하거나 새로고침해도 저장된 원본과 초안은 업로드 이력에서 찾을 수 있습니다.</p>
  </div>;
