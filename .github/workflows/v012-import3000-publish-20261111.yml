@@ -1,0 +1,70 @@
+name: Verify and publish v0.12 3000-row reviewed source
+on:
+  push:
+    branches: [build/v012-import3000-publish-20261111]
+permissions:
+  contents: write
+jobs:
+  source-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Fetch reviewed offline source bundle with pinned digest
+        env:
+          BUNDLE_URL: https://sb-n1bj3qf56rrw.vercel.run/trade-v012.bundle
+          BUNDLE_SHA256: 1c5f1000529db90e53f37d834297c34d01a5b80a34159b35b13bed7254225650
+          BASE_SHA: fb0b1252e9be6225baba40d6c96c8cb9d6179c2a
+          SOURCE_SHA: 3eb607614076c588b54ea23406fa80771fdcddd9
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 45 "$BUNDLE_URL" -o /tmp/trade-v012.bundle
+          echo "$BUNDLE_SHA256  /tmp/trade-v012.bundle" | sha256sum -c -
+          git bundle verify /tmp/trade-v012.bundle
+          git fetch /tmp/trade-v012.bundle refs/heads/codex/bulk3000-demo-20261111
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test -f shared/import-limits.mjs
+          test -f tests/bulk3000-real-shape.test.mjs
+          test "$(git status --porcelain | wc -l)" -eq 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Locked install and dependency audit
+        run: |
+          npm ci
+          npm audit --audit-level=low
+      - name: Validate full unit and compiled frontend
+        run: |
+          npm test
+          npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser and responsive regression
+        env:
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
+        run: npm run test:e2e
+      - name: Package tested source
+        if: success()
+        run: |
+          mkdir -p /tmp/v012-source
+          git archive HEAD | tar -x -C /tmp/v012-source
+          cp -R dist /tmp/v012-source/dist
+          tar -czf trade-v012-source-and-build.tar.gz -C /tmp/v012-source .
+      - name: Upload downloadable CI source package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trade-v012-source-and-build
+          path: trade-v012-source-and-build.tar.gz
+          retention-days: 14
+      - name: Publish reviewed commit to final PR branch (not main)
+        if: success()
+        env:
+          SOURCE_SHA: 3eb607614076c588b54ea23406fa80771fdcddd9
+        run: git push origin "$SOURCE_SHA:refs/heads/codex/bulk3000-demo-20261111"
