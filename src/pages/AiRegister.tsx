@@ -18,13 +18,17 @@ export default function AiRegister({resumeId}:{resumeId?:string}){
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;stop.current=true;};},[]);
  async function read(id:string,offset=0){const p=await api<Preview>('/registration-preview/'+id+'?offset='+offset);if(alive.current)setPreview(p);return p;}
  async function run(fn:()=>Promise<void>){if(lock.current)return;lock.current=true;stop.current=false;setBusy(true);setError('');try{await fn();}catch(e){if(alive.current)setError(e instanceof Error?e.message:'처리하지 못했습니다. 원본은 보존됩니다.');}finally{lock.current=false;if(alive.current){setBusy(false);setPhase('');}}}
- async function enrich(id:string,total:number,force=false){setPhase('제품정보 확인 중');setProgress(0);
-  for(let i=0;i<total&&!stop.current&&alive.current;i++){
+ async function enrich(id:string,total:number,force=false,start=0){
+  if(!status?.providers.procurement.configured&&!(status?.aiConfigured&&consent)){await read(id,preview?.offset||0);return;}
+  // Large official lists must remain usable without thousands of blocking network requests.
+  const end=Math.min(total,start+50);
+  setPhase(total>50?'제품정보 50건씩 보완 중':'제품정보 확인 중');setProgress(start);
+  for(let i=start;i<end&&!stop.current&&alive.current;i++){
    const r=await post<{done:boolean;nextCursor:number}>('/registration-preview/'+id+'/enrich',{cursor:i,useAi:true,consent,force});setProgress(r.nextCursor);if(r.done)break;
   }
-  if(alive.current)await read(id);
+  if(alive.current)await read(id,preview?.offset||0);
  }
- async function prepare(s:Source){setPhase('원본 표 분석 중');const p=await post<Preview>('/registration-preview/'+s.id+'/prepare',{department});setPreview(p);setManual(false);if(p.state==='PREVIEW')await enrich(s.id,p.total);}
+ async function prepare(s:Source){setPhase('원본 표 분석 중');const p=await post<Preview>('/registration-preview/'+s.id+'/prepare',{department});setPreview(p);setManual(false);if(p.state==='PREVIEW'&&p.total<=50)await enrich(s.id,p.total);}
  useEffect(()=>{if(!resumeId)return;void run(async()=>{
   setSource({id:resumeId,name:'저장한 파일'});
   try{await read(resumeId);}catch(e){const original=await api<Source>('/ai-core/register/'+resumeId+'/status');setSource(original);await prepare(original);}
@@ -46,12 +50,12 @@ export default function AiRegister({resumeId}:{resumeId?:string}){
  const complete=preview?.state==='COMPLETE';
  return <div className="register-flow"><PageHead title="AI 물품등록" description="파일을 올리고, 필요한 부분만 고친 뒤 등록하세요."/>
  <ol className="registration-steps" aria-label="등록 진행"><li className={!preview?'active':'done'}>1 파일 분석</li><li className={preview&&!complete?'active':complete?'done':''}>2 담당자 확인</li><li className={complete?'active':''}>3 등록 완료</li></ol>
- {!preview?<><DropArea testId="ai-document-upload" accept=".ozd,.xlsx,.xls" disabled={busy} title="OZD·엑셀 파일을 끌어다 놓으세요" description="8MB 이하 · 최대 2,000행" buttonLabel="파일 선택" onFiles={files=>upload(files[0])}/>
+ {!preview?<><DropArea testId="ai-document-upload" accept=".ozd,.xlsx,.xls" disabled={busy} title="OZD·엑셀 파일을 끌어다 놓으세요" description="8MB 이하 · 엑셀 최대 3,000행" buttonLabel="파일 선택" onFiles={files=>upload(files[0])}/>
  <details className="registration-settings"><summary>분석 설정</summary><label>기본 보관 부서<input value={department} maxLength={100} onChange={e=>setDepartment(e.target.value)} disabled={busy}/></label><label className="check"><input type="checkbox" disabled={busy||!status?.aiConfigured} checked={consent} onChange={e=>setConsent(e.target.checked)}/>제품정보를 외부 AI로 보내 원문 기반 보완</label><small>조달청 {status?.providers.procurement.configured?'연결됨':'미연결'} · AI {status?.aiConfigured?'연결됨':'미연결'}</small></details></>:null}
  {error?<ErrorBox message={error}/>:null}
  {busy?<div className="registration-progress" role="status"><strong>{phase||'처리 중'}</strong>{preview?<><progress value={progress} max={preview.total}/><span>{progress}/{preview.total}묶음</span><button className="text-button" type="button" onClick={()=>{stop.current=true;}}>현재 항목 후 중단</button></>:null}</div>:null}
  {preview&&!complete?<>
- <header className="registration-summary"><div><span className="status-pending">아직 등록되지 않았습니다</span><h2>분석 완료 · {preview.total}묶음 / {preview.quantity}개</h2><p>{preview.name}</p></div><button type="button" className="button secondary compact" disabled={busy||!!editing} onClick={()=>void run(()=>enrich(preview.id,preview.total,true))}><RefreshCw size={16}/>제품정보 확인</button></header>
+ <header className="registration-summary"><div><span className="status-pending">아직 등록되지 않았습니다</span><h2>분석 완료 · {preview.total}묶음 / {preview.quantity}개</h2><p>{preview.name}</p></div><button type="button" className="button secondary compact" disabled={busy||!!editing} onClick={()=>void run(()=>enrich(preview.id,preview.total,preview.enriched>=preview.total,preview.enriched>=preview.total?preview.offset:preview.enriched))}><RefreshCw size={16}/>{preview.total>50?(preview.enriched>=preview.total?'현재 40건 다시 확인':`추가 정보 보완 · ${preview.enriched}/${preview.total} (50건씩)`):'제품정보 확인'}</button></header>
  <div className="registration-cards">{preview.items.map(item=><article key={item.key} className="registration-card">
  <div className="registration-photo">{item.referencePhoto?<><img src={'/api/registration-preview/'+preview.id+'/items/'+item.key+'/reference'} alt={item.fields.title+' 제품 참고사진'}/><small>제품 참고사진 · 현물 아님</small></>:<><Package size={32}/><small>현물사진 등록 후 첨부</small></>}</div>
  <div className="registration-content"><div className="registration-item-title"><h3>{item.fields.title}</h3><strong>{item.quantity}개</strong></div><p>{item.fields.manufacturer||'제조사 미기재'} · {item.fields.model||'모델 미기재'}</p><p>{item.fields.specification||'규격 미기재'}</p>

@@ -1,3 +1,7 @@
+> **v0.12 코드 변경(아직 운영 미반영)**: [3,000행·단일 테스트 계정·샘플300·삭제복원·검색 개선](docs/BULK3000_SINGLE_DEMO_V012.md) · [Codex 인계](docs/CODEX_BULK3000_V012_HANDOFF.md) · [검증](docs/BULK3000_TEST_REPORT.md)
+> 단일 테스트 로그인은 **별도 로컬 데모**에서만 `admin / 1234`를 허용합니다. 실제 운영기관의 계정·DB·RAG·API 키를 변경하지 않습니다.
+> **실제 사용자 엑셀 원본은 GitHub에 업로드하지 않습니다.** 본문 2,194개, 합계행 1개, 중복 자산번호는 대장 연결 유보.
+
 > **v0.11 검토용 코드:** [트럭 적재·확인 후 등록](docs/PACKING_REVIEW_V011.md) · [Codex 마무리](docs/CODEX_PACKING_REVIEW_HANDOFF.md) · [검증](docs/PACKING_REVIEW_TEST_REPORT.md)
 > 예시 운임 + 트럭 배치 계산. 새 AI 등록 화면은 분석 결과만 보관하고 **확인하고 등록** 후 실제 비공개 물품을 생성합니다.
 >

@@ -1,3 +1,4 @@
+import {MAX_IMPORT_ROWS} from '../shared/import-limits.mjs';
 import {importAvailability} from './import-lifecycle.mjs';
 import {z} from 'zod';
 import {parseCatalogName} from './catalog-name.mjs';
@@ -25,6 +26,7 @@ export function previewImport(batch,input){
   const cell=k=>cells[config.mapping[k]]||{text:'',value:null};
   const text=k=>cell(k).text.trim();
   if(/^(합계|총계|소계|총합계)$/.test(text('originalName').replace(/\s/g,''))){skipped++;continue;}
+  if(!text('originalName')&&!text('externalId')&&cells.slice(0,4).some(c=>/^(합계|총계|소계|총합계)$/.test(c.text.replace(/\s/g,'')))){skipped++;continue;}
   if(!text('originalName')&&!text('quantity')){skipped++;continue;}
   const rowNumber=index+1;
   const values={};for(const [key]of IMPORT_FIELDS)values[key]=text(key);
@@ -62,8 +64,16 @@ export function previewImport(batch,input){
   rows.push({...values,rowNumber,raw:cells});
  }
  if(!rows.length&&!errors.length)errors.push({row:config.headerRow,messages:['선택한 머리글 아래에 데이터가 없습니다.']});
- if(rows.length>2000)errors.push({row:0,messages:['최대 2,000개 데이터 행을 가져올 수 있습니다.']});
- const ids=new Set();for(const row of rows)if(row.externalId){if(ids.has(row.externalId))errors.push({row:row.rowNumber,messages:[`중복 기관 자산번호: ${row.externalId}`]});ids.add(row.externalId);}
+ if(rows.length+errors.length>MAX_IMPORT_ROWS)errors.push({row:0,messages:['최대 3,000개 데이터 행을 가져올 수 있습니다. 일부만 잘라 등록하지 않습니다.']});
+ const ids=new Map();for(const row of rows)if(row.externalId){const list=ids.get(row.externalId)||[];list.push(row);ids.set(row.externalId,list);}
+ let pending=0;
+ for(const [externalId,list]of ids)if(list.length>1){
+  const departments=new Set(list.map(r=>r.department));
+  if(list.every(r=>r.department)&&departments.size===list.length){
+   for(const r of list){r.assetLinkPending=true;pending++;}
+  }else for(const r of list.slice(1))errors.push({row:r.rowNumber,messages:[`같은 부서의 중복 기관 자산번호: ${externalId}`]});
+ }
+ if(pending)warnings.push(`서로 다른 부서에서 반복된 자산번호 ${pending}행은 원본번호·부서를 보존해 물품은 등록하되, 공식 자산 연결은 담당자 대조 후 진행합니다.`);
  if(rows.some(r=>!r.externalId))warnings.push('기관 자산번호가 없는 행은 초안만 만듭니다. 실물 인계 전에 공식 자산행을 별도로 연결하세요.');
  if(rows.some(r=>!r.decisionRef))warnings.push('불용결정번호가 없는 물품은 비공개 초안이며 결정 증빙 확인 전 게시되지 않습니다.');
  if(rows.some(r=>/폐품|폐기/.test(r.condition)))warnings.push('원본에 폐품·폐기 상태가 있습니다. 이 값은 보존하며 재사용 적합성은 현물 검수와 별도 증빙 검토로 확인해야 합니다.');
@@ -76,14 +86,14 @@ export function confirmImport(db,user,batchId,input,{allowExpired=false}={}){bus
  const requestHash=hash(JSON.stringify([batch.file_hash,plan.config]));
  return transaction(db,()=>{
   const prior=db.prepare('SELECT result FROM import_receipts WHERE org_id=? AND request_hash=?').get(user.org_id,requestHash);if(prior)return {...JSON.parse(prior.result),reused:true};
-  for(const row of plan.rows)must(!db.prepare('SELECT 1 FROM imported_rows WHERE org_id=? AND file_hash=? AND sheet=? AND row_number=?').get(user.org_id,batch.file_hash,plan.config.sheet,row.rowNumber),`${row.rowNumber}행은 이미 등록했습니다. 기존 초안을 확인하세요.`,409);
+  for(const row of plan.rows)must(!db.prepare('SELECT 1 FROM imported_rows WHERE org_id=? AND file_hash=? AND sheet=? AND row_number=?').get(user.org_id,batch.file_hash,plan.config.sheet,row.rowNumber),`${row.rowNumber}행은 이미 등록했습니다. 기존 물품 또는 삭제 보관함에서 복원하세요.`,409);
   const lotIds=[];
   for(const group of plan.groups){
    const first=group[0],quantity=group.reduce((n,r)=>n+r.quantity,0);
    const d={department:first.department,specification:first.specification,classificationName:first.classificationName,listingNo:first.listingNo,title:first.originalName.slice(0,100),category:'OTHER',manufacturer:first.manufacturer||'',model:first.model||'',description:first.specification?`엑셀 기재 규격: ${first.specification}`:'',actualCount:quantity,ledgerCount:quantity,decisionQty:quantity,decisionRef:first.decisionRef,decisionDate:first.decisionDate,sourceTargetReference:`${batch.name} / ${plan.config.sheet} / ${group.map(r=>r.rowNumber).join(', ')}행 (승인 대상 대조 필요)`.slice(0,1000),originalName:first.sourceName,classificationCode:first.classificationCode,identificationCode:first.identificationCode,mismatchNote:'',pickup:'수령기관 운반 · 상차 및 일정 별도 협의',needsWipe:false,specialReview:false,privacyChecked:false,groups:[{condition:'UNKNOWN',quantity,inspection:'NONE',note:'엑셀 등록 · 현물 상태/수량 확인 필요'}]};
    const id=saveLot(db,user,d);lotIds.push(id);
-   db.prepare('UPDATE lots SET source_snapshot=? WHERE id=?').run(JSON.stringify({...JSON.parse(db.prepare('SELECT source_snapshot FROM lots WHERE id=?').get(id).source_snapshot),source:batch.workbook.inputFormat==='OZD'?'OZD_DOCUMENT_IMPORT':'EDUFINE_EXCEL_IMPORT',inputFormat:batch.workbook.inputFormat||'EXCEL',conversion:batch.workbook.conversion||null,originalRows:group.map(r=>({rowNumber:r.rowNumber,originalName:r.sourceName,quantity:r.quantity,acquiredDate:r.acquiredDate,acquiredUnitPrice:r.acquiredUnitPrice,acquiredAmount:r.acquiredPrice,condition:r.condition})),fileHash:batch.file_hash,fileName:batch.name,sheet:plan.config.sheet,listingNo:first.listingNo,department:first.department,specification:first.specification,classificationName:first.classificationName,institutionName:first.institutionName,rowNumbers:group.map(r=>r.rowNumber)}),id);
-   const assetRows=group.filter(r=>r.externalId).map(r=>assetSchema.parse({...r,originalName:r.sourceName}));
+   db.prepare('UPDATE lots SET source_snapshot=? WHERE id=?').run(JSON.stringify({...JSON.parse(db.prepare('SELECT source_snapshot FROM lots WHERE id=?').get(id).source_snapshot),source:batch.workbook.inputFormat==='OZD'?'OZD_DOCUMENT_IMPORT':'EDUFINE_EXCEL_IMPORT',inputFormat:batch.workbook.inputFormat||'EXCEL',conversion:batch.workbook.conversion||null,originalRows:group.map(r=>({rowNumber:r.rowNumber,externalId:r.externalId,stickerId:r.stickerId||'',department:r.department,initialAcquiredAmount:r.initialAcquiredAmount||'',assetLinkPending:!!r.assetLinkPending,originalName:r.sourceName,quantity:r.quantity,acquiredDate:r.acquiredDate,acquiredUnitPrice:r.acquiredUnitPrice,acquiredAmount:r.acquiredPrice,condition:r.condition})),fileHash:batch.file_hash,fileName:batch.name,sheet:plan.config.sheet,listingNo:first.listingNo,department:first.department,specification:first.specification,classificationName:first.classificationName,institutionName:first.institutionName,rowNumbers:group.map(r=>r.rowNumber)}),id);
+   const assetRows=group.filter(r=>r.externalId&&!r.assetLinkPending).map(r=>assetSchema.parse({...r,originalName:r.sourceName}));
    if(assetRows.length){importAssets(db,user,assetRows,batch.name);const ids=assetRows.map(r=>db.prepare('SELECT id FROM assets WHERE org_id=? AND external_id=?').get(user.org_id,r.externalId).id);bindAssets(db,user,id,ids);}
    for(const r of group)db.prepare('INSERT INTO imported_rows VALUES(?,?,?,?,?)').run(user.org_id,batch.file_hash,plan.config.sheet,r.rowNumber,id);
   }

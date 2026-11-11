@@ -1,3 +1,4 @@
+import {MAX_IMPORT_ROWS} from '../../shared/import-limits.mjs';
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
 import {must,audit,now,transaction} from '../db.mjs';
@@ -30,14 +31,14 @@ export function preparePreview(db,user,id,input={}){
  const existing=db.prepare('SELECT batch_id FROM registration_previews WHERE batch_id=? AND org_id=?').get(id,user.org_id);
  if(existing)return previewStatus(db,user,id);
  const registered=registrationLots(db,user,id);
- must(!registered.length,'이미 등록한 원본입니다. 업로드 이력에서 기존 물품을 확인하세요.',409,'ALREADY_REGISTERED');
+ must(!registered.length,'이미 등록한 원본입니다. 업로드 이력에서 기존 물품을 확인하거나 삭제 보관함에서 복원하세요.',409,'ALREADY_REGISTERED');
  must(batch.workbook.conversion?.state!=='WAITING','파일 해석을 먼저 완료하세요.',409);
  const sheets=batch.workbook.sheets.filter(s=>s.mapping?.originalName!==undefined&&s.mapping?.quantity!==undefined);
  must(sheets.length===1,'품명·수량 열이 모호하거나 여러 표가 있습니다. 직접 등록에서 원본 열을 확인하세요.',422,'IMPORT_NEEDS_MAPPING');
  const sheet=sheets[0],config={sheet:sheet.name,headerRow:sheet.suggestedHeader,mapping:sheet.mapping,department:cfg.department,groupIdentical:true};
  const plan=previewImport(batch,config);must(!plan.errors.length,'원본 오류: '+plan.errors.slice(0,3).map(e=>e.row+'행 '+e.messages.join(' ')).join(' / '),422);
  const items=plan.groups.map((group,index)=>{const f=group[0];return {key:String(index),quantity:group.reduce((n,r)=>n+r.quantity,0),listingNo:f.listingNo,identificationCode:f.identificationCode,
-  originalRows:group.map(r=>({row:r.rowNumber,name:r.sourceName,quantity:r.quantity,condition:r.condition,acquiredUnitPrice:r.acquiredUnitPrice})),
+  originalRows:group.map(r=>({row:r.rowNumber,externalId:r.externalId,stickerId:r.stickerId||'',department:r.department,assetLinkPending:!!r.assetLinkPending,initialAcquiredAmount:r.initialAcquiredAmount||'',name:r.sourceName,quantity:r.quantity,condition:r.condition,acquiredUnitPrice:r.acquiredUnitPrice})),
   sourceText:[f.sourceName,f.specification,f.manufacturer,f.model].filter(Boolean).join('\n').slice(0,5000),
   fields:{title:f.originalName.slice(0,100),manufacturer:f.manufacturer||'',model:f.model||'',specification:f.specification||'',description:f.specification?'엑셀 기재 규격: '+f.specification:'',department:f.department||''},
   provenance:{},enriched:false,edited:[],notes:[],referencePhoto:null,useReferencePhoto:false};});
@@ -108,11 +109,11 @@ export function confirmPreview(db,user,id,input){
 }
 export function mountPreviewRegistration(app,db,options){
  const active=new Set();
- const guard=u=>{svc.business(u);const since=new Date(Date.now()-3600000).toISOString();must(db.prepare("SELECT COUNT(*) n FROM audit_events WHERE actor_id=? AND action='AI_PREVIEW_REQUEST' AND created_at>?").get(u.id,since).n<2500,'시간당 처리 한도입니다.',429);audit(db,u,'AI_PREVIEW_REQUEST',u.id);};
+ const guard=u=>{svc.business(u);const since=new Date(Date.now()-3600000).toISOString();must(db.prepare("SELECT COUNT(*) n FROM audit_events WHERE actor_id=? AND action='AI_PREVIEW_REQUEST' AND created_at>?").get(u.id,since).n<4000,'시간당 처리 한도입니다.',429);audit(db,u,'AI_PREVIEW_REQUEST',u.id);};
  app.post('/api/registration-preview/:id/prepare',(req,res)=>{guard(req.user);res.json(preparePreview(db,req.user,req.params.id,req.body));});
- app.get('/api/registration-preview/:id',(req,res)=>{svc.business(req.user);const offset=z.coerce.number().int().min(0).max(2000).parse(req.query.offset||0);res.json(previewStatus(db,req.user,req.params.id,offset));});
+ app.get('/api/registration-preview/:id',(req,res)=>{svc.business(req.user);const offset=z.coerce.number().int().min(0).max(MAX_IMPORT_ROWS).parse(req.query.offset||0);res.json(previewStatus(db,req.user,req.params.id,offset));});
  app.patch('/api/registration-preview/:id/items/:key',(req,res)=>{guard(req.user);res.json(editPreview(db,req.user,req.params.id,req.params.key,req.body));});
- app.post('/api/registration-preview/:id/enrich',async(req,res)=>{guard(req.user);const d=z.object({cursor:z.number().int().min(0).max(2000).default(0),consent:z.boolean().default(false),useAi:z.boolean().default(true),force:z.boolean().default(false)}).strict().parse(req.body);
+ app.post('/api/registration-preview/:id/enrich',async(req,res)=>{guard(req.user);const d=z.object({cursor:z.number().int().min(0).max(MAX_IMPORT_ROWS).default(0),consent:z.boolean().default(false),useAi:z.boolean().default(true),force:z.boolean().default(false)}).strict().parse(req.body);
   const key=req.user.org_id+':'+req.params.id;must(!active.has(key),'이 파일을 분석 중입니다.',409);active.add(key);try{res.json(await enrichPreview(db,req.user,req.params.id,{...options,...d}));}finally{active.delete(key);}
  });
  app.post('/api/registration-preview/:id/confirm',(req,res)=>{guard(req.user);must(!active.has(req.user.org_id+':'+req.params.id),'분석 종료 후 확인해 주세요.',409);res.json(confirmPreview(db,req.user,req.params.id,req.body));});

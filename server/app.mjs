@@ -1,3 +1,6 @@
+import {mountLotManagement} from './lot-management.mjs';
+import {mountTestAccount} from './demo-single.mjs';
+import {mountDemoSamples} from './demo-samples.mjs';
 import {mountRag} from './rag/routes.mjs';
 import {mountFeedback,feedbackFileAccess} from './feedback.mjs';
 import express from 'express';
@@ -17,7 +20,7 @@ const appVersion=JSON.parse(readFileSync(new URL('../package.json',import.meta.u
 
 export const csvCell=v=>{const s=String(v??'');return '"'+(/^[\s]*[=+@\-\t\r]/.test(s)?"'"+s:s).replaceAll('"','""')+'"';};
 export const csv=rows=>'\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n');
-export function createApp(db,{dataDir=resolve(process.env.DATA_DIR||'./data'),origin=process.env.APP_ORIGIN||'http://localhost:4310',demo=process.env.DEMO_MODE==='true',enhancements={},rag={}}={}){
+export function createApp(db,{dataDir=resolve(process.env.DATA_DIR||'./data'),origin=process.env.APP_ORIGIN||'http://localhost:4310',demo=process.env.DEMO_MODE==='true',singleDemo=false,enhancements={},rag={}}={}){
   const app=express();app.disable('x-powered-by');
   const uploadDir=join(dataDir,'uploads');mkdirSync(uploadDir,{recursive:true,mode:0o700});
   const secure=process.env.SECURE_COOKIE==='true';
@@ -25,14 +28,17 @@ export function createApp(db,{dataDir=resolve(process.env.DATA_DIR||'./data'),or
   app.use((req,res,next)=>{res.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin','Permissions-Policy':'geolocation=(), microphone=()','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"});if(req.path.startsWith('/api'))res.set('Cache-Control','no-store');if(origin.startsWith('https://')&&req.get('X-Forwarded-Proto')?.split(',')[0].trim()==='http')return res.redirect(308,origin+req.originalUrl);next();});
   app.use(express.json({limit:'2mb'}));
   app.get('/api/health',(req,res)=>res.json({ok:true,version:appVersion}));
-  app.get('/api/meta',(req,res)=>res.json({demo,capabilities,version:appVersion}));
-  app.post('/api/auth/login',throttle(),(req,res)=>{protectWrite(req,origin);const d=z.object({email:z.string().email().max(320),password:z.string().min(1).max(200)}).parse(req.body);const user=db.prepare('SELECT u.*,o.name AS org_name,o.district,o.active AS org_active FROM users u JOIN organizations o ON o.id=u.org_id WHERE email=?').get(d.email.toLowerCase().trim());const saved=user?.password_hash||'00000000000000000000000000000000:'+ '00'.repeat(64);const correct=verifyPassword(d.password,saved);must(user&&user.active&&user.org_active&&correct,'이메일 또는 비밀번호를 확인하세요.',401,'INVALID_LOGIN');const session=createSession(db,user.id);audit(db,user,'LOGIN',user.id);res.set('Set-Cookie',cookie(session.token));res.json({user:publicUser(user),csrf:session.csrf});});
+  app.get('/api/meta',(req,res)=>res.json({demo,singleDemo,capabilities,version:appVersion}));
+  app.post('/api/auth/login',throttle(),(req,res)=>{protectWrite(req,origin);const d=z.object({email:z.string().trim().min(1).max(320).refine(v=>singleDemo?/^[a-zA-Z0-9._-]{3,80}$/.test(v):z.string().email().safeParse(v).success),password:z.string().min(1).max(200)}).parse(req.body);const user=db.prepare('SELECT u.*,EXISTS(SELECT 1 FROM test_accounts t WHERE t.user_id=u.id) AS test_account,o.name AS org_name,o.district,o.active AS org_active FROM users u JOIN organizations o ON o.id=u.org_id WHERE email=?').get(d.email.toLowerCase().trim());const saved=user?.password_hash||'00000000000000000000000000000000:'+ '00'.repeat(64);const correct=verifyPassword(d.password,saved);must(user&&user.active&&user.org_active&&correct&&(!singleDemo||user.test_account)&&(!user.test_account||singleDemo),singleDemo?'아이디 또는 비밀번호를 확인하세요.':'이메일 또는 비밀번호를 확인하세요.',401,'INVALID_LOGIN');const session=createSession(db,user.id);audit(db,user,'LOGIN',user.id);res.set('Set-Cookie',cookie(session.token));res.json({user:publicUser(user),csrf:session.csrf});});
   app.use('/api',requireAuth(db));
   app.use('/api',(req,res,next)=>{protectWrite(req,origin);next();});
+  mountTestAccount(app,db,{singleDemo});
+  mountDemoSamples(app,db,{demo,dataDir});
+  mountLotManagement(app,db,{demo});
   app.get('/api/auth/me',(req,res)=>res.json({user:publicUser(req.user),csrf:req.user.csrf}));
   app.post('/api/auth/logout',(req,res)=>{db.prepare('DELETE FROM sessions WHERE token_hash=?').run(req.user.token_hash);res.set('Set-Cookie',cookie('',0));res.json({ok:true});});
-  app.post('/api/auth/password',(req,res)=>{const d=z.object({oldPassword:z.string().max(200),newPassword:z.string().min(12).max(200)}).parse(req.body);const user=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);must(verifyPassword(d.oldPassword,user.password_hash),'현재 비밀번호가 맞지 않습니다.',403);import('./auth.mjs').then(({passwordHash})=>{transaction(db,()=>{db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(passwordHash(d.newPassword),user.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);audit(db,req.user,'PASSWORD_CHANGE',user.id);});res.set('Set-Cookie',cookie('',0));res.json({ok:true});}).catch(e=>res.status(500).json({error:'비밀번호 변경 실패'}));});
-  app.get('/api/lots',(req,res)=>res.json(svc.listLots(db,req.user,{mine:req.query.mine==='true',q:String(req.query.q||''),category:String(req.query.category||''),district:String(req.query.district||''),min:Math.max(0,Number(req.query.min)||0),favorites:req.query.favorites==='true'})));
+  app.post('/api/auth/password',(req,res)=>{const d=z.object({oldPassword:z.string().max(200),newPassword:z.string().min(12).max(200)}).parse(req.body);const user=db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);must(verifyPassword(d.oldPassword,user.password_hash),'현재 비밀번호가 맞지 않습니다.',403);import('./auth.mjs').then(({passwordHash})=>{transaction(db,()=>{db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(passwordHash(d.newPassword),user.id);db.prepare('UPDATE test_accounts SET initial_password=0 WHERE user_id=?').run(user.id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);audit(db,req.user,'PASSWORD_CHANGE',user.id);});res.set('Set-Cookie',cookie('',0));res.json({ok:true});}).catch(e=>res.status(500).json({error:'비밀번호 변경 실패'}));});
+  app.get('/api/lots',(req,res)=>res.json(svc.listLots(db,req.user,{mine:req.query.mine==='true',q:String(req.query.q||''),category:String(req.query.category||''),district:String(req.query.district||''),min:Math.max(0,Number(req.query.min)||0),favorites:req.query.favorites==='true',sort:String(req.query.sort||'')})));
   app.post('/api/lots',(req,res)=>res.status(201).json({id:svc.saveLot(db,req.user,req.body)}));
   app.get('/api/lots/:id',(req,res)=>res.json(svc.getLot(db,req.user,req.params.id)));
   app.put('/api/lots/:id',(req,res)=>res.json({id:svc.saveLot(db,req.user,req.body,req.params.id)}));

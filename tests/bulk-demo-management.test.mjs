@@ -1,0 +1,77 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {openDatabase} from '../server/db.mjs';
+import {createApp} from '../server/app.mjs';
+import {ensureSingleDemo,assertSingleDemoDeployment} from '../server/demo-single.mjs';
+import {seedAdditionalSamples} from '../server/demo-samples.mjs';
+import {archivePreview,archiveLots,restoreLots} from '../server/lot-management.mjs';
+import {listLots} from '../server/service.mjs';
+
+async function setup(t){
+ const dir=mkdtempSync(join(tmpdir(),'trade-bulk-demo-'));
+ t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const file=join(dir,'trade.sqlite'),db=openDatabase(file);
+ t.after(()=>{try{db.close();}catch{}});
+ const id=ensureSingleDemo(db),user=db.prepare('SELECT * FROM users WHERE id=?').get(id);
+ return {dir,file,db,user};
+}
+test('로컬 단일 테스트 계정 1개와 300개 가상 타기관 샘플 · 재실행 멱등',async t=>{
+ const {db,dir,user}=await setup(t);
+ assert.equal(user.email,'admin');
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM users WHERE active=1').get().n,1);
+ assert.throws(()=>assertSingleDemoDeployment(db,{origin:'https://demo.example.com',host:'0.0.0.0',mode:'development'}),/로컬/);
+ const first=await seedAdditionalSamples(db,dir,{demo:true,count:300});
+ assert.equal(first.added,300);
+ const second=await seedAdditionalSamples(db,dir,{demo:true,count:300});
+ assert.equal(second.added,0);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM users WHERE active=1').get().n,1);
+ assert.equal(listLots(db,user).length,300);
+ assert.ok(listLots(db,user,{q:'의자'}).length>0);
+ const compact=listLots(db,user,{q:'회의용의자'}).map(x=>x.id);
+ const spaced=listLots(db,user,{q:'회의용 의자'}).map(x=>x.id);
+ assert.deepEqual(compact,spaced);
+ assert.ok(listLots(db,user,{q:'캐비넷'}).length>0);
+ assert.deepEqual(listLots(db,user,{q:'캐비넷'}).map(x=>x.id),listLots(db,user,{q:'캐비닛'}).map(x=>x.id));
+ assert.ok(listLots(db,user,{q:'의자 말고 책상'}).every(x=>!x.title.includes('의자')));
+});
+test('샘플 전체 초기화는 비밀번호·정확한 확인문구·스냅샷 필요, 300건 복원',async t=>{
+ const {db,dir,user}=await setup(t);
+ await seedAdditionalSamples(db,dir,{demo:true,count:300});
+ const selection={scope:'samples',ids:[]};
+ const preview=archivePreview(db,user,selection,{demo:true});
+ assert.equal(preview.count,300);
+ assert.throws(()=>archiveLots(db,user,{selection,snapshot:preview.snapshot,phrase:preview.phrase,password:'wrong'},{demo:true}),/비밀번호/);
+ assert.throws(()=>archiveLots(db,user,{selection,snapshot:preview.snapshot,phrase:'잘못된 확인',password:'1234'},{demo:true}),/확인/);
+ const archived=archiveLots(db,user,{selection,snapshot:preview.snapshot,phrase:preview.phrase,password:'1234'},{demo:true});
+ assert.equal(archived.archived,300);
+ assert.equal(listLots(db,user).length,0);
+ const ids=db.prepare('SELECT lot_id FROM demo_sample_lots').all().map(r=>r.lot_id);
+ const restored=restoreLots(db,user,{ids,password:'1234'},{demo:true});
+ assert.equal(restored.restored,300);
+ assert.equal(listLots(db,user).length,300);
+});
+test('단일 테스트 계정 변경: 기존 1234 차단 · 서버 세션 무효화 · 재시작 후 유지',async t=>{
+ const {dir,file,db}=await setup(t);
+ const origin='http://localhost:4310',app=createApp(db,{dataDir:dir,origin,demo:true,singleDemo:true});
+ const server=app.listen(0,'127.0.0.1');
+ await new Promise(resolve=>server.once('listening',resolve));
+ t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const base='http://127.0.0.1:'+server.address().port;
+ const login=(email,password)=>fetch(base+'/api/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+ const first=await login('admin','1234');assert.equal(first.status,200);
+ const info=await first.json();assert.equal(info.user.role,'EDITOR');assert.equal(info.user.testAccount,true);
+ const oldSession=first.headers.get('set-cookie').split(';')[0];
+ let result=await fetch(base+'/api/auth/test-account',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json','X-CSRF-Token':info.csrf,Cookie:oldSession},
+  body:JSON.stringify({currentPassword:'1234',newLogin:'testadmin',newPassword:'TestingPassword!456'})});
+ assert.equal(result.status,200);
+ assert.equal((await login('admin','1234')).status,401);
+ assert.equal((await login('testadmin','1234')).status,401);
+ assert.equal((await login('testadmin','TestingPassword!456')).status,200);
+ result=await fetch(base+'/api/auth/me',{headers:{Cookie:oldSession}});
+ assert.equal(result.status,401);
+ assert.doesNotThrow(()=>assertSingleDemoDeployment(db,{origin:'https://demo.example.com',host:'0.0.0.0',mode:'development'}));
+ assert.equal(ensureSingleDemo(db),info.user.id);
+});
