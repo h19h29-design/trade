@@ -2,7 +2,54 @@
 
 사용자가 2026-10-31에 지정한 대상은 **NAS 볼륨2 + Cloudflare + trade.h19h19.com**이다. 기관 운영 승인은 없으므로 합성 자료 시연으로 구성한다. 외부 API·AI의 실제 연결 상태는 아래 최신 배포 기록을 따른다.
 
-## 최신 v0.7.1 — 파일 등록·대화창·기존 NAS 보존 통합 (2026-11-04)
+## 최신 v0.12 — 3,000행 등록·단일 테스트 계정·샘플 300·보관함 (2026-11-11)
+
+[https://trade.h19h19.com](https://trade.h19h19.com)에 v0.12.0을 배포했다. PR #10(`3eb6076`, 기능)을 병합한 뒤 PR #11(`8eb72af`, 운영 이미지의 `shared/` 누락 수정)을 추가로 병합했고, 최종 main 병합 커밋 **`815f6d0`**의 트리로 이미지를 다시 빌드해 앱만 교체했다.
+
+| 항목 | 실제 확인값 |
+|---|---|
+| 배포 소스 / main | `815f6d0` (PR #11 병합 커밋, `8eb72af`와 트리 동일) |
+| 현재 링크 / 이미지 | `/volume2/docker/trade/current` → `releases/815f6d0` / `mulppum-ieum:815f6d0` |
+| 이미지 ID | `sha256:3eebc7ed4ded1ede7d537f3078bbd18bb8c9da64cc9b7b89353a3016b3e68778` |
+| 앱 / 상태 | `mulppum-ieum-app-1`, v0.12.0, Docker healthy, HTTPS 200 |
+| DB / 첨부 | `/volume2/docker/trade/demo-data/trade.sqlite` / 같은 경로 `uploads/` (기존 경로 유지) |
+| DB 스키마 | `user_version=8`, `integrity_check=ok`, FK 오류 0 |
+| 보존 건수 | lots 13 · assets 8 · imported_rows 6 · users 7 · files 18 |
+| AI / RAG | Hive `deepseek-ai/deepseek-v4.1-flash-1017`, RAG 121문서/8,164구간 |
+| 포트 / 네트워크 | `127.0.0.1:14310` → 4310, `mulppum-ieum_default`, `10.253.43.0/28` 유지 |
+| 환경 백업 | `deployments/env.nas.before-815f6d0`, `deployments/env.nas.before-v012` |
+
+### schema7→8 백업·별도 복원
+
+| 대상 | 백업 | 별도 경로 복원 |
+|---|---|---|
+| 교체 전 schema7 | `backups/2026-11-11T03-43-12Z-v012-pre` | `backups/restore-checks/2026-11-11T03-43-12Z-v012-schema8` (schema8) |
+| 배포 직전 schema8 | `backups/2026-11-11T03-58-17.954Z` | `restore-checks/2026-11-11T03-58-17.954Z-v012-post` |
+| 호출량·자료 | 기존 `rag-usage.sqlite`·`knowledge/` 읽기 전용 경로 유지 | 초기화·덮어쓰기 없음 |
+
+배포 직전 앱만 중지한 상태에서 SQLite backup API로 DB와 첨부 18개를 백업했다. 새 경로 복원본도 schema8·무결성·FK 0건·lots 13/assets 8/imported_rows 6/users 7/files 18로 원본과 일치했다. 새 이미지 `815f6d0`은 동일 복원본에 loopback 시험 컨테이너로 기동해 health 0.12.0을 확인한 뒤 교체했다.
+
+### 배포 중 발견·복구한 회귀
+
+- v0.12 Dockerfile이 새 `shared/import-limits.mjs`를 런타임 이미지에 복사하지 않아 첫 배포가 `ERR_MODULE_NOT_FOUND`로 502가 됐다. DB는 이미 schema8로 전환된 상태였고 v0.11 롤백은 `Database version is newer than this application`으로 거부됐다. Dockerfile에 `COPY --chown=node:node shared ./shared`를 추가한 `8eb72af`를 PR #11로 병합한 뒤 재빌드해 healthy를 회복했다. 기존 DB·백업·복원본은 삭제하지 않았다.
+- 최종 교체 시 `nas.rag.compose.yml`을 함께 적용하지 않아 AI/RAG 환경과 `/app/rag-private` 마운트가 일시적으로 빠졌다. 키는 변경하지 않고 기존 `nas.compose.yml`+`nas.network.compose.yml`+`nas.rag.compose.yml` 3개 구성으로 앱만 다시 생성해 Hive 1017·RAG 121문서/8,164구간을 복구했다. 이후 `.env.nas`에서 바뀐 항목은 `TRADE_RELEASE` 하나뿐이다.
+
+### 실제 검수
+
+- `npm ci` 알려진 취약점 0건, `npm test` **186개 통과**, `npm run build` 성공, UTF-8 Chromium E2E **36개 통과**.
+- 운영 `/api/ai-core/status`: `provider=hive`, `model=deepseek-ai/deepseek-v4.1-flash-1017`, 조달 configured, 사진 참고자료 사용 가능. 위치·경로는 미설정으로 유지.
+- 운영 AI 검색 `책상` 1개: 점수 89, 신청 가능 18개, 장단점·근거·배송 미확인 표시, AI 설명의 모든 `sourceIds`가 계산 근거와 일치. 같은 검색 `1000개`는 **982개 부족**을 명시하고 부분 충족으로 표시했다.
+- 조달 식별번호 `20269246` 1건 조회(캐시), RAG 질문은 `GENERATED` 4개 섹션·출처 4개, 모델 `deepseek-ai/deepseek-v4.1-flash-1017`.
+- 적재: 60×60×60cm·10kg 20개·25km → 3개 차량 옵션, 중형 1회 146,000원(117,000~190,000원). `sample=true`, `binding=false`, `sample-2026-11-v1`이며 실제 견적이 아니다.
+- 1440px/390px에서 `/manage`, `/packing`, `/ai-register`, `/market` 가로 넘침 없음·페이지 오류 0건. 운영 `/manage`는 등록 9건과 합성 샘플 관리 안내를 표시한다.
+
+### 남은 제약
+
+- 실제 `(전체기관대상) 관리전환 소요조회 목록 (2194개).xlsx`는 이번 마무리 환경의 로컬·외장·NAS 검색 범위에 없었다. 원본의 2,194행·1,902개 고유번호·249개 중복번호그룹(541행) 통계는 구현 단계의 비공개 검수 기록에 있으나, **v0.12 비공개 테스트 환경에 실제 파일을 다시 업로드해 최종등록하는 검수는 미완료**다. 같은 16열·2,194행 구조의 합성 재현 파일로는 확인 전 0건 → 확인 후 lots 2,494(기존 샘플 300 + 2,194), assets 1,653, imported_rows 2,194를 확인했다. 실제 파일·원문 행은 Git·외부 AI·공개 CI에 넣지 않았다.
+- `admin / 1234` 단일 테스트 계정, 샘플 300건, 개별 삭제·보관함 복원, `testingadmin` 변경·재시작 지속성은 **별도 로컬 DATA_DIR**(`data/v012-single`)에서 검수했다. 운영 계정·비밀번호는 변경하지 않았고 `1234` 상태로 공개하지 않았다.
+- 실제 기관 DB·업무자료를 시연 DB와 섞지 않았고, 사진 AI·카카오 주소/경로·K-에듀파인·온비드 공식 연계는 기존 미연결 상태다.
+
+## 이전 v0.7.1 — 파일 등록·대화창·기존 NAS 보존 통합 (2026-11-04)
 
 [https://trade.h19h19.com](https://trade.h19h19.com)의 실제 앱 소스는 **`522526d92e8b47b71c976413397af69d128c3223`**이다. 최신 main `c9fdbe11421828759f780870bd36b010d91bdc35`에 기존 NAS의 개선사항·Hive1017 RAG·조달 실접속/참고사진 보안 수정을 보존해 통합했다. 기능 코드 배포 뒤 운영 기록만 수정한 문서 커밋은 이미지에 재배포하지 않는다. 자세한 검수는 [V071_COMPLETION.md](V071_COMPLETION.md), 선행 복구 계획은 [V071_MIGRATION.md](V071_MIGRATION.md)를 따른다.
 
