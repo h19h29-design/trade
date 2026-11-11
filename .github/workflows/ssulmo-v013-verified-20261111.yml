@@ -1,0 +1,76 @@
+name: Verify and publish Ssulmo transport v0.13
+on:
+  push:
+    branches: [build/ssulmo-v013-verified-20261111]
+permissions:
+  contents: write
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Fetch reviewed source with pinned digest and parent
+        env:
+          BUNDLE_URL: https://sb-2pbu6c68bran.vercel.run/ssulmo-v013.bundle
+          BUNDLE_SHA256: e4efc5ed71e21fcf0770e1a4b576a286537e7b02d4ca74b08a0c34f242172ed0
+          BASE_SHA: c1a23b251ddc918638474faf9daea86f5796da24
+          SOURCE_SHA: 3cecf194254ef9328a7767dbb36b21892c8033f7
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 45 "$BUNDLE_URL" -o /tmp/ssulmo.bundle
+          echo "$BUNDLE_SHA256  /tmp/ssulmo.bundle" | sha256sum -c -
+          git bundle verify /tmp/ssulmo.bundle
+          git fetch /tmp/ssulmo.bundle refs/heads/codex/ssulmo-delivery-20261111
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test -f server/transport/routes.mjs
+          test -f src/pages/TransportPlanner.tsx
+          test "$(git status --porcelain | wc -l)" -eq 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Locked install and security audit
+        run: |
+          npm ci
+          npm audit --audit-level=low
+      - name: Unit, authorization, API contracts and build
+        run: |
+          npm test
+          npm run build
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Full browser regression and UI evidence
+        env:
+          LANG: C.UTF-8
+          LC_ALL: C.UTF-8
+          TRANSPORT_CAPTURE_DIR: /tmp/ssulmo-ui-evidence
+        run: |
+          mkdir -p /tmp/ssulmo-ui-evidence
+          npm run test:e2e
+      - name: Keep generated UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssulmo-v013-ui-evidence
+          path: /tmp/ssulmo-ui-evidence/*.png
+          retention-days: 14
+      - name: Source-only archive (no secrets, DB, node_modules or built fonts)
+        if: success()
+        run: git archive --format=zip --prefix=ssulmo-v013/ HEAD -o /tmp/ssulmo-v013-source.zip
+      - name: Keep downloadable source
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssulmo-v013-source
+          path: /tmp/ssulmo-v013-source.zip
+          retention-days: 14
+      - name: Push verified source to review branch (not main)
+        if: success()
+        env:
+          SOURCE_SHA: 3cecf194254ef9328a7767dbb36b21892c8033f7
+        run: git push origin "$SOURCE_SHA:refs/heads/codex/ssulmo-delivery-20261111"
