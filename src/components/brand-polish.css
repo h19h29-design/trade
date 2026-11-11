@@ -1,0 +1,11 @@
+/* Pixel-reviewed v0.13 polish. More-specific selectors also win over legacy heading colors. */
+body .transport-total h2{color:#fff}
+body .ssulmo-brand>.ssulmo-word{flex-wrap:nowrap}
+@media(max-width:700px){
+  /* The always-visible AI navigation and bottom navigation already expose registration. */
+  body .topbar-actions>a.button[href="#/ai-register"]{display:none}
+  body .topbar-actions .transport-cart-link{white-space:nowrap;flex-shrink:0;padding:7px 9px}
+  body .topbar .mobile-brand{flex-shrink:0}
+}
+/* Keep the keyboard skip link accessible without appearing in full-page captures when unfocused. */
+body .skip-link:not(:focus){clip-path:inset(50%);width:1px;height:1px;overflow:hidden;white-space:nowrap;padding:0}
