@@ -1,10 +1,11 @@
+import {canonical,compact,catalogMatch} from '../catalog-search.mjs';
 /** Live, authorization-filtered structured RAG. No persistent private-vector cache. */
 export const SCORING_VERSION='ai-core-1.0';
 export const WEIGHTS={purpose:45,quantity:20,condition:15,location:10,information:5,shipping:5};
-const GROUPS=[['의자','체어','chair','chairs'],['책상','데스크','desk','desks'],['테이블','탁자','table'],['모니터','디스플레이','monitor'],['컴퓨터','pc','데스크톱','computer'],['노트북','랩탑','laptop'],['프린터','인쇄기','printer'],['책장','서가','bookcase'],['수납장','캐비닛','보관함'],['빔프로젝터','프로젝터','영사기'],['접이식','폴딩','folding'],['회의용','회의실','회사용'],['학생용','학생','교실','수업']];
+const GROUPS=[['의자','체어','chair','chairs'],['책상','데스크','desk','desks'],['테이블','탁자','table'],['모니터','디스플레이','monitor'],['컴퓨터','pc','데스크톱','computer'],['노트북','랩탑','laptop'],['프린터','프린트기','인쇄기','printer'],['책장','서가','책꽂이','bookcase'],['수납장','캐비닛','캐비넷','보관함'],['빔프로젝터','프로젝터','영사기'],['접이식','폴딩','folding'],['회의용','회의실','회사용'],['학생용','학생','교실','수업']];
 export const DISTRICTS=['강서구','양천구','마포구','강남구','강동구','강북구','관악구','광진구','구로구','금천구','노원구','도봉구','동대문구','동작구','서대문구','서초구','성동구','성북구','송파구','양천구','영등포구','용산구','은평구','종로구','중구','중랑구'];
 const stop=new Set(['찾아줘','찾아주세요','검색','필요','필요해','필요한','원해','물건','물품','해주세요','있는','정도','쓸','추천','좋은','배송','저렴한','싼','가까운','구해줘','구하려고','찾고','싶어','서울','서울시','구합니다','개','대']);
-const normalize=s=>String(s||'').normalize('NFKC').toLowerCase();
+const normalize=s=>canonical(s);
 const words=s=>(normalize(s).match(/[가-힣a-z0-9]+/g)||[]).map(x=>x.replace(/(으로|에서|까지|처럼|이랑|이나|을|를|은|는|에|로)$/,'')).filter(x=>x.length>1&&!stop.has(x)&&!/^\d+(개|대|만원|원)?$/.test(x)&&!DISTRICTS.includes(x));
 const grams=s=>{const v=normalize(s).replace(/\s/g,'');return v.length<2?[v]:Array.from({length:v.length-1},(_,i)=>v.slice(i,i+2));};
 export function inferCriteria(query,input={}){
@@ -26,7 +27,7 @@ function content(lot){return [lot.title,lot.model,lot.manufacturer,lot.classific
 export function retrieve(lots,criteria,expanded=[]){
  const terms=queryTerms(criteria,expanded);if(!terms.length)return [];
  const originalSet=new Set(criteria.terms);
- const documents=lots.map(lot=>({lot,text:normalize(content(lot)),tokens:words(content(lot))}));
+ const documents=lots.map(lot=>({lot,text:normalize(content(lot)+' '+(lot.listingNo||'')+' '+(lot.catalogIdentifier||'')+' '+(lot.actualIdentificationCode||''))+' '+compact(content(lot)+' '+(lot.listingNo||'')+' '+(lot.catalogIdentifier||'')),tokens:words(content(lot))}));
  const df=new Map(terms.map(t=>[t,documents.filter(d=>d.text.includes(t)).length]));
  return documents.map(doc=>{
   const matches=terms.filter(t=>doc.text.includes(t));

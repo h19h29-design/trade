@@ -1,7 +1,7 @@
 /** Additive migrations; never rebuild or reset existing business tables. */
 export function migrateEnhancements(db) {
   const version=Number(db.prepare('PRAGMA user_version').get().user_version);
-  if(version>7)throw new Error('Database version is newer than this application. Do not downgrade.');
+  if(version>8)throw new Error('Database version is newer than this application. Do not downgrade.');
   if(version<2)db.exec(`BEGIN IMMEDIATE;
     CREATE TABLE IF NOT EXISTS import_batches(
       id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES organizations(id),
@@ -124,5 +124,15 @@ export function migrateEnhancements(db) {
       bytes BLOB NOT NULL,sha256 TEXT NOT NULL,source_url TEXT NOT NULL,reference_url TEXT NOT NULL,
       identifier TEXT NOT NULL,PRIMARY KEY(batch_id,item_key));
       PRAGMA user_version=7;`);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
+  }
+  if(version<8){
+    db.exec('BEGIN IMMEDIATE');
+    try{db.exec(`
+      CREATE TABLE IF NOT EXISTS test_accounts(user_id TEXT PRIMARY KEY REFERENCES users(id),initial_password INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS demo_sample_lots(lot_id TEXT PRIMARY KEY REFERENCES lots(id),dataset_id TEXT NOT NULL,sample_key TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS lot_archives(lot_id TEXT PRIMARY KEY REFERENCES lots(id),org_id TEXT NOT NULL,actor_id TEXT NOT NULL,previous_state TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT NOT NULL,restored_at TEXT,operation_id TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS idx_lot_archives_org ON lot_archives(org_id,restored_at);
+      PRAGMA user_version=8;
+    `);db.exec('COMMIT');}catch(e){db.exec('ROLLBACK');throw e;}
   }
 }

@@ -1,15 +1,18 @@
+import {MAX_IMPORT_ROWS,MAX_HEADER_ROWS,MAX_SHEET_ROWS,MAX_WORKBOOK_CELLS} from '../shared/import-limits.mjs';
 import * as XLSX from 'xlsx';
 import {extractWorkbookImages} from './workbook-images.mjs';
 import {Worker,isMainThread,parentPort,workerData} from 'node:worker_threads';
 
 export const IMPORT_FIELDS = [
- ['listingNo','물품목록번호 (8-8)',['물품목록번호','목록번호','g2b목록번호','g2b물품목록번호']],
- ['department','보관 부서',['부서','부서명','보유부서','관리부서','사용부서']],
+ ['listingNo','물품목록번호 (8-8)',['물품목록번호','목록번호','g2b목록번호','g2b물품목록번호','물품목록번호(분류-식별)','물품목록번호(8-8)']],
+ ['department','보관 부서',['부서','부서명','보유부서','관리부서','사용부서','물품조직명']],
  ['institutionName','원본 기관명 (대조용)',['기관명','기관','학교명','보유기관']],
- ['classificationName','물품분류명',['물품분류명','분류명']],
- ['externalId','기관 자산번호',['자산번호','물품관리번호','관리번호','물품고유번호','자산관리번호']],
- ['originalName','대장 품명',['대장품명','물품명','품명','품목명','물품품명','g2b목록명','품명/규격','품명및규격']],
- ['quantity','수량',['수량','등록수량','보유수량','전환수량','불용수량','관리전환수량']],
+ ['classificationName','물품분류명',['물품분류명','분류명','G2B물품분류명']],
+ ['externalId','기관 자산번호',['자산번호','물품관리번호','관리번호','물품고유번호','자산관리번호','물품고유번호(물품대장)']],
+ ['stickerId','스티커 번호 (원본)',['고유번호(스티커)','스티커번호']],
+ ['initialAcquiredAmount','최초취득금액 (원본)',['최초취득금액']],
+ ['originalName','대장 품명',['대장품명','물품명','품명','품목명','물품품명','g2b목록명','G2B물품목록명','물품목록명','품명(규격)','품명/규격','품명및규격']],
+ ['quantity','수량',['수량','등록수량','보유수량','전환수량','불용수량','관리전환수량','소요조회수량','물품수량','등록수량(개)','수량(개)']],
  ['classificationCode','물품분류번호',['물품분류번호','분류번호','세부물품분류번호','세부품명번호']],
  ['identificationCode','물품식별번호',['물품식별번호','식별번호','조달물품식별번호']],
  ['specification','규격 / 모델',['규격','모델명','모델','품목규격']],
@@ -43,11 +46,13 @@ function guardArchive(bytes){
 }
 export function parseWorkbook(bytes){
  bytes=Buffer.from(bytes);if(bytes.length>8*1024*1024)err('엑셀은 8MB 이하로 선택하세요.');guardArchive(bytes);
- const wb=XLSX.read(bytes,{type:'buffer',cellFormula:true,cellHTML:false,cellNF:true,cellText:true,cellDates:false,bookVBA:false,sheetRows:2040});
+ const wb=XLSX.read(bytes,{type:'buffer',cellFormula:true,cellHTML:false,cellNF:true,cellText:true,cellDates:false,bookVBA:false,sheetRows:MAX_SHEET_ROWS+1});
  if(wb.SheetNames.length>20)err('최대 20개 시트까지 지원합니다.');
+ let totalCells=0;
  const sheets=wb.SheetNames.filter((_,i)=>!wb.Workbook?.Sheets?.[i]?.Hidden).map(name=>{
    const ws=wb.Sheets[name],ref=ws['!fullref']||ws['!ref'];if(!ref)return {name,rows:[],suggestedHeader:1,mapping:{},columns:0};
-   const range=XLSX.utils.decode_range(ref);if(range.e.r>=2039||range.e.c>=64)err(`${name}: 2,000개 데이터 행·64개 열 이내로 정리하세요.`);
+   const range=XLSX.utils.decode_range(ref);if(range.e.r>=MAX_SHEET_ROWS||range.e.c>=64)err(`${name}: 3,000개 데이터 행·64개 열 이내로 정리하세요. 원본을 자르지 않고 가져오기를 중단했습니다.`);
+   totalCells+=(range.e.r+1)*(range.e.c+1);if(totalCells>MAX_WORKBOOK_CELLS)err('통합 문서의 총 셀 수가 안전 한도를 넘었습니다. 필요한 시트만 저장하세요.');
    const rows=[];
    for(let r=0;r<=range.e.r;r++){
      const cells=[];
@@ -65,7 +70,7 @@ export function parseWorkbook(bytes){
      rows.push(cells);
    }
    let best={score:0,row:0,mapping:{}};
-   for(let r=0;r<Math.min(30,rows.length);r++){
+   for(let r=0;r<Math.min(MAX_HEADER_ROWS,rows.length);r++){
      const mapping={};
      for(const [key,,aliases]of IMPORT_FIELDS){const indices=rows[r].flatMap((cell,c)=>aliases.some(a=>norm(a)===norm(cell.text))?[c]:[]);if(indices.length===1)mapping[key]=indices[0];}
      const score=Object.keys(mapping).length+(mapping.originalName!==undefined?3:0)+(mapping.quantity!==undefined?3:0);
@@ -74,7 +79,7 @@ export function parseWorkbook(bytes){
    return {name,rows,suggestedHeader:best.row+1,mapping:best.mapping,columns:range.e.c+1};
  });
  if(!sheets.some(s=>s.rows.length>1))err('가져올 표가 없습니다. 숨김 시트는 가져오지 않습니다.');
- const result={sheets};if(JSON.stringify(result).length>4*1024*1024)err('본문이 너무 큽니다. 불필요한 열을 제거하세요.');const pictures=extractWorkbookImages(bytes,sheets.map(s=>s.name));return {...result,...pictures};
+ const result={sheets};if(JSON.stringify(result).length>12*1024*1024)err('본문이 너무 큽니다. 불필요한 열을 제거하세요.');const pictures=extractWorkbookImages(bytes,sheets.map(s=>s.name));return {...result,...pictures};
 }
 export function parseWorkbookIsolated(bytes){return new Promise((resolve,reject)=>{
  const worker=new Worker(new URL(import.meta.url),{workerData:bytes,resourceLimits:{maxOldGenerationSizeMb:192},execArgv:[]});

@@ -1,3 +1,4 @@
+import {MAX_IMPORT_ROWS} from '../../shared/import-limits.mjs';
 import {z} from 'zod';
 import {audit,must} from '../db.mjs';
 import * as svc from '../service.mjs';
@@ -46,7 +47,7 @@ export function mountAiCore(app,db,options={}){
  });
  app.post('/api/ai-core/register/:id/start',(req,res)=>{guard(req.user,'AI_CORE_REGISTER',30);res.json(startRegistration(db,req.user,req.params.id,req.body));});
  app.post('/api/ai-core/register/:id/enrich',async(req,res)=>{
-  guard(req.user,'AI_CORE_ENRICH_BATCH',2200);const d=z.object({cursor:z.number().int().min(0).max(2000).default(0),consent:z.boolean().default(false),useAi:z.boolean().default(true)}).strict().parse(req.body);
+  guard(req.user,'AI_CORE_ENRICH_BATCH',4000);const d=z.object({cursor:z.number().int().min(0).max(MAX_IMPORT_ROWS).default(0),consent:z.boolean().default(false),useAi:z.boolean().default(true)}).strict().parse(req.body);
   const ids=registrationLots(db,req.user,req.params.id);must(ids.length,'등록된 초안이 없습니다. 먼저 파일 검증·등록을 완료하세요.',409);
   const key='register:'+req.user.org_id+':'+req.params.id;must(!active.has(key),'이 파일은 보완 중입니다. 완료 후 다시 시도하세요.',429);active.add(key);
   try{

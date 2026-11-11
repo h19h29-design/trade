@@ -25,7 +25,7 @@ for(const flavor of ['nas-v06','main-v07'])test(`schema4 ${flavor} → schema5 p
  for(let attempt=0;attempt<2;attempt++){
   const db=openDatabase(file);
   try{
-   assert.equal(db.prepare('PRAGMA user_version').get().user_version,7);
+   assert.equal(db.prepare('PRAGMA user_version').get().user_version,8);
    for(const [name,rows]of Object.entries(before))assert.deepEqual(db.prepare(`SELECT * FROM "${name}"`).all(),rows,name);
    for(const name of ['import_documents','feedback','feedback_attachments','catalog_images'])assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name));
    assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');
@@ -41,5 +41,5 @@ for(const flavor of ['nas-v071','main-v09'])test(`schema5 ${flavor} → schema6 
  f.db.prepare('INSERT INTO import_documents VALUES(?,?,?,?,?,?,?,?,?)').run('keep-doc','OZD',Buffer.from('SYNTHETIC-SOURCE'),'synthetic-hash','','','PENDING','2026-01-01','2026-01-01');
  if(flavor==='nas-v071')f.db.exec('DROP TABLE import_document_exports');else{f.db.prepare('INSERT INTO import_document_exports VALUES(?,?,?,?)').run('keep-doc',Buffer.from('SYNTHETIC-EXPORT'),'synthetic-export','2026-01-01');f.db.exec('DROP TABLE feedback_attachments;DROP TABLE feedback');}
  f.db.exec('PRAGMA user_version=5');const before=Object.fromEntries(f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(({name})=>[name,f.db.prepare(`SELECT * FROM "${name}"`).all()]));f.db.close();
- for(let i=0;i<2;i++){const db=openDatabase(file);try{assert.equal(db.prepare('PRAGMA user_version').get().user_version,7);for(const[name,rows]of Object.entries(before))assert.deepEqual(db.prepare(`SELECT * FROM "${name}"`).all(),rows);for(const name of ['feedback','feedback_attachments','import_document_exports'])assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE name=?').get(name));}finally{db.close();}}
+ for(let i=0;i<2;i++){const db=openDatabase(file);try{assert.equal(db.prepare('PRAGMA user_version').get().user_version,8);for(const[name,rows]of Object.entries(before))assert.deepEqual(db.prepare(`SELECT * FROM "${name}"`).all(),rows);for(const name of ['feedback','feedback_attachments','import_document_exports'])assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE name=?').get(name));}finally{db.close();}}
 });
