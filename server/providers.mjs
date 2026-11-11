@@ -8,7 +8,7 @@ export function providerStatus(env=process.env){return {
  procurement:{configured:env.PROCUREMENT_ENABLED==='true'&&!!env.DATA_GO_KR_SERVICE_KEY,referenceImages:env.PROCUREMENT_IMAGE_RIGHTS_CONFIRMED==='true'},
  ai:{configured:env.AI_ENABLED==='true'&&env.AI_DATA_APPROVED==='true'&&!!env.OPENAI_API_KEY&&!!env.AI_MODEL,model:env.AI_ENABLED==='true'?env.AI_MODEL||'':''},
  location:{configured:env.LOCATION_ENABLED==='true'&&!!env.KAKAO_REST_API_KEY},
- route:{configured:env.ROUTE_ENABLED==='true'&&!!env.KAKAO_MOBILITY_REST_API_KEY}
+ route:{configured:env.ROUTE_ENABLED==='true'&&!!(env.KAKAO_MOBILITY_REST_API_KEY||env.KAKAO_REST_API_KEY)}
 };}
 /** Fixed outbound hosts. Never accept a client-supplied API base URL. */
 export async function limitedJson(url,options={},fetcher=fetch){
@@ -83,7 +83,7 @@ export async function geocodeAddress(query,{env=process.env,fetcher=fetch}={}){
 export async function drivingRoute(origin,destination,{env=process.env,fetcher=fetch}={}){
  must(providerStatus(env).route.configured,'도로 경로 API가 미설정입니다. 확인한 거리 또는 좌표 기반 추정거리를 사용하세요.',503,'NOT_CONNECTED');
  const url=new URL('https://apis-navi.kakaomobility.com/v1/directions');url.search=new URLSearchParams({origin:`${origin.lng},${origin.lat}`,destination:`${destination.lng},${destination.lat}`,priority:'RECOMMEND',summary:'true'}).toString();
- const r=await limitedJson(url,{headers:{Authorization:`KakaoAK ${env.KAKAO_MOBILITY_REST_API_KEY}`}},fetcher);const route=r.routes?.[0];
+ const r=await limitedJson(url,{headers:{Authorization:`KakaoAK ${env.KAKAO_MOBILITY_REST_API_KEY||env.KAKAO_REST_API_KEY}`}},fetcher);const route=r.routes?.[0];
  must(route?.result_code===0&&Number.isFinite(route.summary?.distance)&&route.summary.distance>0,'두 위치의 도로 경로를 찾지 못했습니다. 거리 확인이 필요합니다.',422,'NO_ROUTE');
  return {km:route.summary.distance/1000,seconds:route.summary.duration,source:'KAKAO_ROAD',warning:'승용차 경로 기반입니다. 화물차 높이·중량 제한과 통행료는 운송업체가 다시 확인해야 합니다.'};
 }

@@ -15,5 +15,5 @@ const db=openDatabase(resolve(dataDir,'trade.sqlite'));
 if(singleDemo){ensureSingleDemo(db);assertSingleDemoDeployment(db,{origin,host:process.env.HOST||'127.0.0.1',mode:process.env.NODE_ENV});await seedAdditionalSamples(db,dataDir,{demo:true});}else if(demo)await seedDemo(db,dataDir);
 const host=process.env.HOST||'127.0.0.1',port=Number(process.env.PORT||4310);
 const app=createApp(db,{dataDir,origin,demo,singleDemo});
-const server=app.listen(port,host,()=>console.log(`물품이음 ${origin} | 바인딩=${host}:${port} | ${demo?'합성 데이터 시연':'수동 업무 모드'} | DB=${dataDir}/trade.sqlite`));
+const server=app.listen(port,host,()=>console.log(`쓸모잇다 ${origin} | 바인딩=${host}:${port} | ${demo?'합성 데이터 시연':'수동 업무 모드'} | DB=${dataDir}/trade.sqlite`));
 for(const sig of ['SIGTERM','SIGINT'])process.on(sig,()=>server.close(()=>{app.locals.closeRag?.();db.close();process.exit(0);}));
