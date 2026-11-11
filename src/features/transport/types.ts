@@ -1,0 +1,9 @@
+import type {Load,Vehicle} from '../packing/PackingDiagram';
+export interface AddressChoice {token:string;label:string;precision:string;reference:string;expiresAt:number}
+export interface TransportStatus {postcode:boolean;location:boolean;route:boolean;ai:boolean;model:string;sample:boolean;rateLabel:string;rateVersion:string;maxItems:number;maxQuantity:number}
+export interface Dimensions {lengthCm:number;widthCm:number;heightCm:number;unitWeightKg:number}
+export interface CartEntry {lotId:string;quantity:number;version:number}
+export interface PlanItem {id:string;title:string;orgName:string;version:number;quantity:number;available:number;dimensions:Dimensions|null;sources:Record<string,string>;sourceLabels:Record<string,string>;estimated:boolean;missing:string[];notes:string[]}
+export interface PackingOption {vehicleId:string;vehicle:string;vehicleSize:Vehicle;trips:number;estimated:number;low:number;high:number;totalQuantity:number;totalWeightKg:number;loads:Load[];breakdown:{transport:number;handling:number;helpers:number;stairs:number;vat:number}}
+export interface PlanGroup {key:string;orgName:string;origin:{label:string;precision:string;reference:string}|null;items:PlanItem[];status:string;missing:string[];distance?:{km:number;source:string;label:string;seconds:number|null};notes?:string[];packing:{status:string;recommended:PackingOption|null;options:PackingOption[];rejected:{vehicle:string;reasons:string[]}[];sample:boolean;binding:false;assumptions:string[]}|null}
+export interface TransportPlan {status:string;binding:false;sample:boolean;rateVersion:string;rateLabel:string;destination:{label:string;precision:string;reference:string};groups:PlanGroup[];totals:{estimated:number;low:number;high:number;trips:number}|null;aiMode:string;notes:string[];checkedAt:string}

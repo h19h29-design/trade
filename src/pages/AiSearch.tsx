@@ -1,3 +1,4 @@
+import {TransportButton} from '../features/transport/Cart';
 import {useEffect,useRef,useState} from 'react';
 import {Search,Sparkles,Truck,ArrowUpRight,Package,CheckCircle2,TriangleAlert,X} from 'lucide-react';
 import {api} from '../api';
@@ -17,7 +18,7 @@ function ResultCard({item,index}:{item:Recommendation;index:number}){
   <div className="ai-procon"><div><h3><CheckCircle2 size={17}/>맞는 점</h3>{item.pros.slice(0,3).map(e=><p key={e.id}>{e.text}</p>)}</div><div><h3><TriangleAlert size={17}/>확인할 점</h3>{item.cons.slice(0,4).map(e=><p key={e.id}>{e.text}</p>)}</div></div>
   <div className="ai-delivery"><Truck size={22}/><div><b>{d.status==='ESTIMATED'?money(d.low)+' ~ '+money(d.high):'배송비 확인 필요'}</b><p>{d.status==='ESTIMATED'?`${d.distanceKm}km · ${d.trips}회 · ${d.vehicle} · ${d.sample?'예시 단가':'등록 단가'} / 확정 견적 아님`:(d.missing||[]).join(' · ')}</p></div><a className="text-button" href={'#/packing/'+l.id}>트럭에 넣어 보기</a></div>
   <details className="ai-evidence"><summary>점수 기준·등록 근거 보기</summary><div className="ai-score-parts">{item.breakdown.map(p=><div key={p.key}><span>{p.label}</span><progress max={p.max} value={p.score}/><b>{p.score}/{p.max}</b></div>)}</div>{item.evidence.map(e=><p key={e.id}>{e.text}</p>)}{d.assumptions?.map((a,i)=><p className="fineprint" key={i}>{a}</p>)}</details>
-  <div className="actions"><a href={'#/lots/'+l.id} className="button primary compact">물품 확인·신청 <ArrowUpRight size={17}/></a><span className="fineprint">신청 시 현재 수량을 다시 확인합니다.</span></div></div>
+  <div className="actions"><TransportButton lot={l}/><a href={'#/lots/'+l.id} className="button primary compact">물품 확인·신청 <ArrowUpRight size={17}/></a><span className="fineprint">신청 시 현재 수량을 다시 확인합니다.</span></div></div>
  </article>;
 }
 export default function AiSearch(){

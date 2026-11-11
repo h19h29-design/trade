@@ -1,0 +1,63 @@
+import {useEffect,useRef,useState} from 'react';
+import {Truck,Package,MapPin,Plus,Trash2,RefreshCw,ArrowRight,Sparkles} from 'lucide-react';
+import {api,post} from '../api';
+import {useResource} from '../context';
+import {PageHead,ErrorBox,Loading,Empty} from '../components/UI';
+import type {Lot} from '../types';
+import {useTransportCart} from '../features/transport/Cart';
+import AddressPicker from '../features/transport/AddressPicker';
+import PackingDiagram from '../features/packing/PackingDiagram';
+import type {AddressChoice,Dimensions,TransportStatus,TransportPlan,PlanGroup} from '../features/transport/types';
+const won=(v:number)=>Math.round(v).toLocaleString('ko-KR')+'원';
+const labels:[keyof Dimensions,string][]=[['lengthCm','가로(cm)'],['widthCm','세로(cm)'],['heightCm','높이(cm)'],['unitWeightKg','무게(kg)']];
+function ShipmentResult({group,onSelect}:{group:PlanGroup;onSelect:(key:string,vehicle:string)=>void}){
+ const [selected,setSelected]=useState(group.packing?.recommended?.vehicleId||''),[trip,setTrip]=useState(0);
+ const packing=group.packing,option=packing?.options.find(o=>o.vehicleId===selected)||packing?.recommended;
+ return <article className="transport-result-group"><div className="transport-result-title"><div><span className="transport-path-label">출발</span><h3>{group.orgName}</h3><p>{group.origin?.label||'출발지 미확인'} · {group.distance?.km.toLocaleString()||'—'}km</p></div>{option?<div className="transport-group-price"><strong>{won(option.estimated)}</strong><span>{option.vehicle} · {option.trips}회</span></div>:<strong>추가 확인 필요</strong>}</div>
+  <p className="fineprint">{group.distance?.label||group.missing.join(' · ')}</p>
+  {packing&&option?<><div className="transport-truck-options">{packing.options.map(o=><button type="button" key={o.vehicleId} aria-pressed={o.vehicleId===option.vehicleId} className={o.vehicleId===option.vehicleId?'selected':''} onClick={()=>{setSelected(o.vehicleId);setTrip(0);onSelect(group.key,o.vehicleId);}}><Truck size={20}/><span>{o.vehicle}<small>{o.trips}회 · {won(o.estimated)}</small></span></button>)}</div><p className="transport-range">예상 범위 {won(option.low)} ~ {won(option.high)} · 부가세 포함</p>
+   <details className="transport-detail"><summary>트럭 배치와 계산 근거</summary>{option.loads.length>1?<label>적재 회차<select value={Math.min(trip,option.loads.length-1)} onChange={e=>setTrip(+e.target.value)}>{option.loads.map((l,i)=><option value={i} key={i}>{l.trip}회차</option>)}</select></label>:null}{option.loads[trip]?<PackingDiagram load={option.loads[trip]} vehicle={option.vehicleSize}/>:null}<p>운송 {won(option.breakdown.transport)} + 상하차 {won(option.breakdown.handling)} + 인력 {won(option.breakdown.helpers)} + 계단 {won(option.breakdown.stairs)} + 부가세 {won(option.breakdown.vat)}</p>
+    {group.items.map(i=><div key={i.id} className="transport-cargo-facts"><strong>{i.title} · {i.quantity}개</strong><p>{i.dimensions?`${i.dimensions.lengthCm}×${i.dimensions.widthCm}×${i.dimensions.heightCm}cm / ${i.dimensions.unitWeightKg}kg`:i.missing.join(', ')}</p><small>{[...new Set(Object.values(i.sourceLabels))].join(' · ')}</small></div>)}
+    {[...new Set([...(group.notes||[]),...packing.assumptions])].map((n,i)=><p className="fineprint" key={i}>{n}</p>)}</details></>:<div>{group.missing.map(m=><p key={m}>{m}</p>)}{packing?.rejected.map((r,i)=><p key={i}>{r.vehicle}: {r.reasons.join(' ')}</p>)}</div>}
+ </article>;
+}
+export default function TransportPlanner(){
+ const {items,setItems}=useTransportCart(),{data:status}=useResource<TransportStatus>('/transport/status');
+ const [lots,setLots]=useState<Record<string,Lot>>({}),[loadErrors,setLoadErrors]=useState<Record<string,string>>({}),[loading,setLoading]=useState(false),[refresh,setRefresh]=useState(0);
+ const [destination,setDestination]=useState<AddressChoice|null>(null),[origins,setOrigins]=useState<Record<string,AddressChoice|null>>({}),[drafts,setDrafts]=useState<Record<string,Partial<Dimensions>>>({}),[overrides,setOverrides]=useState<Record<string,Dimensions>>({});
+ const [aiConsent,setAiConsent]=useState(false),[routeConsent,setRouteConsent]=useState(false),[handling,setHandling]=useState(false),[helperHours,setHelperHours]=useState(0),[stairs,setStairs]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState<TransportPlan|null>(null);
+ const [selectedTrucks,setSelectedTrucks]=useState<Record<string,string>>({});
+ const displayedTotals=result?.totals?result.groups.reduce((sum,g)=>{const option=g.packing?.options.find(o=>o.vehicleId===selectedTrucks[g.key])||g.packing?.recommended;if(option){for(const k of ['estimated','low','high','trips'] as const)sum[k]+=option[k];}return sum;},{estimated:0,low:0,high:0,trips:0}):null;
+ const seq=useRef(0),ids=items.map(i=>i.lotId).sort().join(',');
+ useEffect(()=>{const c=new AbortController();setLoading(true);void Promise.all(ids.split(',').filter(Boolean).map(async id=>{try{return {id,lot:await api<Lot>('/lots/'+id,{signal:c.signal})};}catch(e){return {id,error:e instanceof Error?e.message:'물품을 읽지 못했습니다.'};}})).then(rows=>{if(c.signal.aborted)return;setLots(Object.fromEntries(rows.filter(r=>r.lot).map(r=>[r.id,r.lot!])));setLoadErrors(Object.fromEntries(rows.filter(r=>r.error).map(r=>[r.id,r.error!])));setLoading(false);});return()=>c.abort();},[ids,refresh]);
+ useEffect(()=>{seq.current++;setResult(null);},[items,destination,origins,overrides,aiConsent,routeConsent,handling,helperHours,stairs,refresh]);
+ useEffect(()=>()=>{seq.current++;},[]);
+ const invalid=items.some(i=>!lots[i.lotId]||i.quantity>lots[i.lotId].available||lots[i.lotId].own||lots[i.lotId].state!=='PUBLISHED');
+ async function calculate(){if(busy||!destination||invalid)return;const turn=++seq.current;setBusy(true);setError('');setResult(null);
+  try{const plan=await post<TransportPlan>('/transport/plan',{selections:items.map(i=>({lotId:i.lotId,quantity:i.quantity,version:lots[i.lotId].version,...(overrides[i.lotId]?{dimensions:overrides[i.lotId]}:{}),...(origins[i.lotId]?{originToken:origins[i.lotId]!.token}:{})})),destinationToken:destination.token,aiConsent,routeConsent,handling,helperHours,stairsFloors:stairs});if(turn===seq.current){setResult(plan);setSelectedTrucks({});setDrafts(old=>Object.fromEntries(plan.groups.flatMap(g=>g.items).map(i=>[i.id,old[i.id]||i.dimensions||{}])));}}
+  catch(e){if(turn===seq.current)setError(e instanceof Error?e.message:'운송비를 계산하지 못했습니다.');}finally{setBusy(false);}}
+ function saveDimensions(id:string){const v=drafts[id]||{};if(labels.some(([k])=>!Number.isFinite(v[k])||Number(v[k])<=0)){setError('포장 크기 세 항목과 개당 무게를 모두 입력하세요.');return;}setOverrides({...overrides,[id]:v as Dimensions});setError('');}
+ return <div className="transport-page"><PageHead title="가져올 물품·운송비" description="물품을 잇고, 받을 곳을 정하면 운송비까지." action={<a className="button secondary" href="#/market"><Plus size={17}/>물품 더 담기</a>}/>
+ <ol className="transport-steps"><li className={items.length?'done':'active'}><Package size={19}/>물품·수량</li><li className={destination?'done':'active'}><MapPin size={19}/>받을 주소</li><li className={result?'done':''}><Truck size={19}/>예상 운송비</li></ol>
+ {!items.length?<Empty title="필요한 물품부터 담아 보세요" description="물품 찾기나 AI 검색에서 ‘가져올 물품 담기’를 누르면 여기에서 함께 계산할 수 있습니다." action={<a className="button primary" href="#/market">물품 찾기 <ArrowRight size={18}/></a>}/>:<>
+ <div className="transport-layout"><section className="transport-selections"><div className="transport-section-title"><h2>가져올 물품 <span>{items.length}종</span></h2><button type="button" disabled={busy||loading} className="text-button" onClick={()=>setRefresh(n=>n+1)}><RefreshCw size={15}/>수량 새로 확인</button></div>
+ {loading&&!Object.keys(lots).length?<Loading/>:items.map(entry=>{const lot=lots[entry.lotId];return <article className="transport-selection" key={entry.lotId}>
+  <div className="transport-selection-main"><div className="transport-thumb">{lot?.photos[0]?<img src={'/api/files/'+lot.photos[0].id} alt=""/>:<Package size={25}/>}</div><div><h3>{lot?.title||'선택한 물품'}</h3><p>{lot?.orgName} · {lot?.district}</p><small>{loadErrors[entry.lotId]||`현재 ${lot?.available??'—'}개 가능`}</small></div><button type="button" className="icon-button" aria-label={(lot?.title||'물품')+' 빼기'} disabled={busy} onClick={()=>setItems(items.filter(i=>i.lotId!==entry.lotId))}><Trash2 size={16}/></button></div>
+  <div className="transport-selection-quantity"><label>가져올 수량<input aria-label={(lot?.title||'물품')+' 가져올 수량'} type="number" min={1} max={Math.min(lot?.available||2000,2000)} value={entry.quantity} disabled={busy} onChange={e=>{const quantity=Math.max(1,Math.min(2000,Math.floor(+e.target.value)||1));setItems(items.map(i=>i.lotId===entry.lotId?{...i,quantity}:i));}}/></label><span>{overrides[entry.lotId]?'입력한 크기로 계산':lot?.dimensionsConfirmed?'확인된 크기 사용':'등록정보 → AI·유형별 가정 순으로 보완'}</span></div>
+  {lot&&entry.quantity>lot.available?<p className="transport-warning" role="alert">가능한 수량이 부족합니다. 수량을 줄이거나 목록을 갱신하세요.</p>:null}
+  <details className="transport-detail"><summary>크기·출발지 확인 / 수정</summary><p className="fineprint">이번 계산에만 사용합니다. 원본 물품정보는 변경하지 않습니다.</p><div className="transport-dimensions">{labels.map(([key,label])=><label key={key}>{label}<input type="number" min={key==='unitWeightKg'?.1:1} max={key==='unitWeightKg'?10000:2000} step="0.1" disabled={busy} value={drafts[entry.lotId]?.[key]??overrides[entry.lotId]?.[key]??lot?.dimensions?.[key]??''} onChange={e=>setDrafts({...drafts,[entry.lotId]:{...(drafts[entry.lotId]||lot?.dimensions||{}),[key]:+e.target.value}})}/></label>)}</div><div className="actions"><button className="button secondary compact" disabled={busy} onClick={()=>saveDimensions(entry.lotId)}>이 크기로 계산</button>{overrides[entry.lotId]?<button className="text-button" disabled={busy} onClick={()=>setOverrides(old=>{const n={...old};delete n[entry.lotId];return n;})}>자동 판단으로</button>:null}</div>
+   <AddressPicker label={lot?.title+' 출발지'} value={origins[entry.lotId]||null} onChange={v=>setOrigins({...origins,[entry.lotId]:v})} configured={status?.location} disabled={busy}/></details>
+ </article>;})}</section>
+ <aside className="transport-destination"><h2>어디로 받을까요?</h2><AddressPicker label="받을 주소" value={destination} onChange={setDestination} configured={status?.location} disabled={busy}/>
+ {status?.ai?<label className="check transport-consent"><input type="checkbox" disabled={busy} checked={aiConsent} onChange={e=>setAiConsent(e.target.checked)}/>제품정보를 기존 AI에 보내 부족한 크기·무게 추정</label>:<p className="fineprint">AI 미연결 시 등록 규격과 유형별 가정값으로 계산합니다.</p>}
+ {status?.route?<label className="check transport-consent"><input type="checkbox" disabled={busy} checked={routeConsent} onChange={e=>setRouteConsent(e.target.checked)}/>확인된 위치를 카카오 도로 API로 조회</label>:null}
+ <details className="transport-detail"><summary>상하차·인력·계단 비용</summary><label className="check"><input type="checkbox" checked={handling} disabled={busy} onChange={e=>setHandling(e.target.checked)}/>상하차 비용 포함</label><label>출발지마다 인력 시간<input type="number" min={0} max={48} value={helperHours} disabled={busy} onChange={e=>setHelperHours(Math.max(0,Math.min(48,+e.target.value)))}/></label><label>출발지마다 계단 층수<input type="number" min={0} max={50} value={stairs} disabled={busy} onChange={e=>setStairs(Math.max(0,Math.min(50,Math.floor(+e.target.value))))}/></label></details>
+ <button type="button" className="button primary full transport-calculate" disabled={busy||loading||invalid||!destination} onClick={()=>void calculate()}><Sparkles size={19}/>{busy?'규격·거리·적재 계산 중…':'예상 운송비 계산'}</button><p className="fineprint">예시 단가 · 예약/결제되지 않습니다.</p>
+ </aside></div>
+ {error?<ErrorBox message={error}/>:null}
+ {result?<section className="transport-results" aria-live="polite"><div className="transport-total"><div><span>{result.sample?'예시 운임으로 계산한':'등록 단가로 계산한'} 예상 운송비</span><h2>{displayedTotals?won(displayedTotals.estimated):'추가 정보가 필요합니다'}</h2><p>{displayedTotals?`${won(displayedTotals.low)} ~ ${won(displayedTotals.high)} · 출발지 ${result.groups.length}곳 / 총 ${displayedTotals.trips}회`:'크기·출발지가 확인되지 않은 물품을 먼저 수정하세요.'}</p></div><div className="transport-its-line" aria-hidden="true"><Package/><i/><MapPin/></div></div>
+ <p className="transport-result-disclaimer">확정 견적이 아닙니다. 추정 규격과 지역 거리를 사용한 경우 실제 비용과 차이가 클 수 있습니다.</p>{result.groups.map(g=><ShipmentResult key={g.key} group={g} onSelect={(key,vehicle)=>setSelectedTrucks(old=>({...old,[key]:vehicle}))}/>)}
+ <details className="transport-detail"><summary>계산 가정·확인 시점</summary>{result.notes.map((n,i)=><p key={i}>{n}</p>)}<p>{result.rateLabel} · {new Date(result.checkedAt).toLocaleString('ko-KR')}</p><p>물품 상태와 수량은 계산 직후 다시 검사합니다. 계산 이후의 예약 변동은 별도 확인하세요.</p></details></section>:null}
+ </>}
+ </div>;
+}
