@@ -26,7 +26,16 @@ export function ensureDemoOperator(db,{adminId=process.env.ADMIN_ID,adminPasswor
   }
   db.prepare('UPDATE users SET active=1 WHERE id=?').run(user.id);
   const disabled=db.prepare('UPDATE users SET active=0 WHERE email LIKE ? AND email<>? AND active=1').run('%'+DEMO_ACCOUNT_DOMAIN,id).changes;
-  if(created||disabled)audit(db,{org_id:user.org_id,id:user.id},'DEMO_OPERATOR_READY',user.id,{created,seededDemoDisabled:disabled,credentialsFromEnvironment:true});
-  return {configured:true,created,disabled,email:id};
+  // Single-actor demo: keep the publish gate (reviewer must differ from creator) by recording the
+  // review as this non-login reviewer identity in the same organisation.
+  const reviewerEmail=id+'.reviewer@demo.internal';
+  let reviewer=db.prepare('SELECT id FROM users WHERE org_id=? AND email=?').get(user.org_id,reviewerEmail);
+  if(!reviewer){
+   const reviewerId=uid();
+   db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?,0,?)').run(reviewerId,user.org_id,'시연 검토자',reviewerEmail,passwordHash(uid()),'REVIEWER',now());
+   reviewer={id:reviewerId};
+  }
+  if(created||disabled)audit(db,{org_id:user.org_id,id:user.id},'DEMO_OPERATOR_READY',user.id,{created,seededDemoDisabled:disabled,credentialsFromEnvironment:true,reviewerId:reviewer.id});
+  return {configured:true,created,disabled,email:id,reviewerId:reviewer.id};
  });
 }

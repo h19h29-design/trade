@@ -31,6 +31,8 @@ export function createApp(db,{dataDir=resolve(process.env.DATA_DIR||'./data'),or
   app.get('/api/meta',(req,res)=>res.json({demo,singleDemo,capabilities,version:appVersion}));
   app.post('/api/auth/login',throttle(),(req,res)=>{protectWrite(req,origin);const d=z.object({email:z.string().trim().min(1).max(320).refine(v=>/^[a-zA-Z0-9._-]{3,80}$/.test(v)||z.string().email().safeParse(v).success),password:z.string().min(1).max(200)}).parse(req.body);const user=db.prepare('SELECT u.*,EXISTS(SELECT 1 FROM test_accounts t WHERE t.user_id=u.id) AS test_account,o.name AS org_name,o.district,o.active AS org_active FROM users u JOIN organizations o ON o.id=u.org_id WHERE email=?').get(d.email.toLowerCase().trim());const saved=user?.password_hash||'00000000000000000000000000000000:'+ '00'.repeat(64);const correct=verifyPassword(d.password,saved);must(user&&user.active&&user.org_active&&correct&&(!singleDemo||user.test_account)&&(!user.test_account||singleDemo),'아이디 또는 비밀번호를 확인하세요.',401,'INVALID_LOGIN');const session=createSession(db,user.id);audit(db,user,'LOGIN',user.id);res.set('Set-Cookie',cookie(session.token));res.json({user:publicUser(user),csrf:session.csrf});});
   app.use('/api',requireAuth(db));
+  const demoOperatorEmail=demo?(process.env.ADMIN_ID||'').trim().toLowerCase():'';
+  app.use('/api',(req,res,next)=>{if(demoOperatorEmail&&req.user.email===demoOperatorEmail){req.user.demoSingle=true;const reviewer=db.prepare('SELECT id FROM users WHERE org_id=? AND email=?').get(req.user.org_id,demoOperatorEmail+'.reviewer@demo.internal');req.user.demoReviewerId=reviewer?.id||req.user.id;}next();});
   app.use('/api',(req,res,next)=>{protectWrite(req,origin);next();});
   mountTestAccount(app,db,{singleDemo});
   mountDemoSamples(app,db,{demo,dataDir});
