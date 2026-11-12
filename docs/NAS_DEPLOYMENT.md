@@ -634,5 +634,28 @@ DB·uploads·계정·RAG·키·모델 설정은 변경하지 않았다. 배포 �
 
 시연 계정을 다시 로그인시켜야 하면 `.env.nas`의 `ADMIN_ID`·`ADMIN_PASSWORD`를 비우고 `UPDATE users SET active=1 WHERE email LIKE '%@demo.local'`를 실행한 뒤 재기동한다(운영 데이터 삭제 없음).
 
+### 시연 단일계정 흐름·AI 공급자 전환 — 2026-11-12
+
+시연 영상의 등록→검토→게시→신청→인계·인수→대장·완료를 **한 로그인**으로 진행할 수 있게 했다. 운영자 계정에만 적용되는 시연 단일계정 모드로, 일반 계정과 비시연 배포의 권한 규칙은 그대로다.
+
+| 구분 | 동작 |
+|---|---|
+| 검토·게시 | 운영자가 자기 초안을 승인. 게시 게이트(작성자≠검토자)는 유지되어 검토는 같은 기관의 비로그인 "시연 검토자" 신원으로 기록 |
+| 같은 기관 신청 | 시연 모드에서만 허용(일반 계정은 계속 차단) |
+| 인계·인수·대장·완료 | 양측 단계 모두 운영자 계정으로 기록 |
+
+RAG 공급자로 `openai`를 추가했다. `RAG_PROVIDER=openai`, `RAG_MODEL=gpt-6.1-sol`을 서버 비밀환경에만 두고 고정 엔드포인트·모델 응답 검증·JSON 스키마·출처 검증은 기존과 동일하게 유지한다. 기존 Hive 설정값은 지우지 않았다.
+
+| 항목 | 실제 값 |
+|---|---|
+| 앱 소스 | `a4033c68dedfc7399497143fd8ce0f20491339ea` (PR #20) |
+| 이미지 / current | `mulppum-ieum:a4033c6` / `releases/a4033c6` |
+| 백업 | `backups/<ts>-openai` (교체 전, 무결성 ok) |
+| 환경 백업 | `deployments/env.nas.before-openai`, `env.nas.before-a4033c6` |
+| 롤백 | `releases/688fe1a`, 이미지 `mulppum-ieum:688fe1a` |
+
+배포 컨테이너 안에서 `rag-check --live`를 실행해 실제 모델 응답 `gpt-6.1-sol`과 출처 검증된 섹션 생성을 확인했다. `npm test` 210개·`npm run build`·UTF-8 E2E 39개 통과.
+
+
 
 
