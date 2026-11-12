@@ -13,6 +13,8 @@ services:
       APP_ORIGIN: https://trade.h19h19.com
       DATA_DIR: /app/data
       DEMO_MODE: ${TRADE_DEMO_MODE:-false}
+      ADMIN_ID: ${ADMIN_ID:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECURE_COOKIE: "true"
       OZD_BRIDGE_ENABLED: ${OZD_BRIDGE_ENABLED:-false}
       OZD_BRIDGE_APPROVED: ${OZD_BRIDGE_APPROVED:-false}

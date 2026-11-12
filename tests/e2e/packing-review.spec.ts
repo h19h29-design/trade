@@ -1,6 +1,6 @@
 import {test,expect,type Page} from '@playwright/test';
 import {makeOzd,syntheticRows} from '../fixtures/native-ozd.mjs';
-async function login(page:Page){await page.goto('/');await page.getByLabel('이메일',{exact:true}).fill('staff1@demo.local');await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();await expect(page.getByRole('heading',{name:'AI 물품검색',exact:true})).toBeVisible();}
+async function login(page:Page){await page.goto('/');await page.getByLabel('이메일 또는 아이디',{exact:true}).fill('staff1@demo.local');await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();await expect(page.getByRole('heading',{name:'AI 물품검색',exact:true})).toBeVisible();}
 test('크기·수량 변경 시 적재 배치와 운송횟수·예시 가격 자동 재계산',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await login(page);await page.goto('/#/packing');
  await expect(page.getByRole('heading',{name:'트럭 적재·배송비'})).toBeVisible();await expect(page.locator('.packing-option')).toHaveCount(3);
