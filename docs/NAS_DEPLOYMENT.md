@@ -618,4 +618,21 @@ GitLab(`gitlab.aigov.go.kr`)은 2026-11-12 00:00부터 운영체계 점검으로
 
 DB·uploads·계정·RAG·키·모델 설정은 변경하지 않았다. 배포 후 로그인 화면에서 목록·공통 비밀번호가 사라졌고(빌드 산출물 검색 0건), 기존 계정 로그인은 200으로 유지된다. PC·모바일 가로 넘침 0, `npm test` 205개·`npm run build`·UTF-8 E2E 39개 통과.
 
+### 시연 로그인 운영자 계정 전환 — 2026-11-12
+
+시연 배포에서 환경에 설정한 운영자 계정만 로그인되도록 바꿨다. 기동 시 `ADMIN_ID`·`ADMIN_PASSWORD`로 운영자 계정(`시연 운영기관`, EDITOR)을 만들고, 함께 시드된 시연 기관 계정 7개는 `active=0`으로 로그인만 차단했다. 물품·첨부·감사 이력의 소유자 행은 그대로 두어 공개 카탈로그 306건이 유지된다.
+
+| 항목 | 실제 구성 |
+|---|---|
+| 앱 소스 | `688fe1aff0942549d534f8abbdff58ab6e1d6991` (PR #19) |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:688fe1a` |
+| 백업 (교체 전) | `backups/2026-11-12T04-28-19Z-operator-login` (무결성 ok) |
+| 환경 백업 | `deployments/env.nas.before-688fe1a`, `deployments/env.nas.before-operator` |
+| 롤백 기준 | `releases/1f17f42`, 이미지 `mulppum-ieum:1f17f42` 보존 |
+
+기동 로그에 운영자 계정 최초 생성과 시연 계정 7건 차단이 기록됐다. 운영자 계정 로그인은 200(EDITOR, `시연 운영기관`), `staff1@demo.local`은 401이며, 공개 물품 306건(샘플 300 포함)은 그대로 조회된다. PC 1440px·모바일 390px에서 로그인→AI 물품검색 진입과 가로 넘침 0을 확인했다. `npm test` 209개·`npm run build`·UTF-8 E2E 39개 통과.
+
+시연 계정을 다시 로그인시켜야 하면 `.env.nas`의 `ADMIN_ID`·`ADMIN_PASSWORD`를 비우고 `UPDATE users SET active=1 WHERE email LIKE '%@demo.local'`를 실행한 뒤 재기동한다(운영 데이터 삭제 없음).
+
+
 
