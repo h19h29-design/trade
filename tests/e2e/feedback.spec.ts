@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import sharp from 'sharp';
 async function login(page:Page,email='staff1@demo.local'){
-  await page.goto('/');await page.getByLabel('이메일',{exact:true}).fill(email);await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인',exact:true}).click();
+  await page.goto('/');await page.getByLabel('이메일 또는 아이디',{exact:true}).fill(email);await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인',exact:true}).click();
   await expect(page.getByRole('heading',{name:email==='admin@demo.local'?'기관·담당자 관리':'AI 물품검색',exact:true})).toBeVisible();
 }
 test('개선사항 사진·문서 접수, 실패 입력 보존·재시도·관리자 답변·다운로드',async({page,browser})=>{

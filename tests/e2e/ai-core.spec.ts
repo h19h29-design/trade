@@ -5,7 +5,7 @@ import {startAiTestServer} from '../fixtures/ai-core-server.mjs';
 const autoRows=syntheticRows().map(row=>({...row,THNG_NM:row.THNG_NM+' AI자동등록전용'}));
 const autoOzd=()=>makeOzd({rows:autoRows});
 async function signIn(page:Page,email='staff2@demo.local',url='/'){
- await page.goto(url);await page.getByLabel('이메일',{exact:true}).fill(email);await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();await expect(page.getByRole('heading',{name:'AI 물품검색',exact:true})).toBeVisible();
+ await page.goto(url);await page.getByLabel('이메일 또는 아이디',{exact:true}).fill(email);await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();await expect(page.getByRole('heading',{name:'AI 물품검색',exact:true})).toBeVisible();
 }
 async function hash(page:Page,path:string){await page.evaluate(path=>{location.hash=path;},path);}
 async function drop(page:Page,bytes:Buffer,name:string){const data=await page.evaluateHandle(({bytes,name})=>{const d=new DataTransfer();d.items.add(new File([new Uint8Array(bytes)],name,{type:'application/octet-stream'}));return d;},{bytes:Array.from(bytes),name});await page.getByTestId('ai-document-upload-dropzone').dispatchEvent('drop',{dataTransfer:data});await data.dispose();}

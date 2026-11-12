@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 import {openDatabase} from './db.mjs';
 import {createApp} from './app.mjs';
 import {seedDemo} from './seed.mjs';
+import {ensureDemoOperator} from './demo-operator.mjs';
 const dataDir=resolve(process.env.DATA_DIR||'./data');
 const origin=process.env.APP_ORIGIN||'http://localhost:4310';
 const demo=process.env.DEMO_MODE==='true',singleDemo=process.env.SINGLE_DEMO_MODE==='true';
@@ -13,6 +14,7 @@ if(!/^https:\/\//.test(origin)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.te
 if(origin.startsWith('https://')&&process.env.SECURE_COOKIE!=='true')throw new Error('HTTPS 배포에는 SECURE_COOKIE=true가 필요합니다.');
 const db=openDatabase(resolve(dataDir,'trade.sqlite'));
 if(singleDemo){ensureSingleDemo(db);assertSingleDemoDeployment(db,{origin,host:process.env.HOST||'127.0.0.1',mode:process.env.NODE_ENV});await seedAdditionalSamples(db,dataDir,{demo:true});}else if(demo)await seedDemo(db,dataDir);
+if(demo&&!singleDemo){const operator=ensureDemoOperator(db);if(operator.configured)console.log(`시연 운영자 계정=${operator.email} 최초생성=${operator.created} 차단한 시연계정=${operator.disabled}`);}
 const host=process.env.HOST||'127.0.0.1',port=Number(process.env.PORT||4310);
 const app=createApp(db,{dataDir,origin,demo,singleDemo});
 const server=app.listen(port,host,()=>console.log(`쓸모잇다 ${origin} | 바인딩=${host}:${port} | ${demo?'합성 데이터 시연':'수동 업무 모드'} | DB=${dataDir}/trade.sqlite`));

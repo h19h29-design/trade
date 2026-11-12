@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 async function login(page:Page){
  await page.goto('/');await expect(page).toHaveTitle(/쓸모잇다/);
- await page.getByLabel('이메일',{exact:true}).fill('staff1@demo.local');await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();
+ await page.getByLabel('이메일 또는 아이디',{exact:true}).fill('staff1@demo.local');await page.getByLabel('비밀번호',{exact:true}).fill('DemoTrade!2026');await page.getByRole('button',{name:'기관 계정으로 로그인'}).click();
  await expect(page.getByRole('heading',{name:'AI 물품검색',exact:true})).toBeVisible();
 }
 async function addMonitor(page:Page){
