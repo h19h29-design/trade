@@ -1,9 +1,10 @@
 /** Fixed, explicitly selected DeepSeek endpoints. Never fall back across providers/models. */
 export const DEEPSEEK_BASE='https://api.deepseek.com';
 export const HIVE_BASE='https://api-cdn.thehive.ai/api/v3';
+export const OPENAI_BASE='https://api.openai.com/v1';
 export const HIVE_MODEL='deepseek-ai/deepseek-v4.1-flash-1017';
-export function ragConfig(env=process.env){const provider=env.RAG_PROVIDER||'deepseek';return {provider,enabled:env.RAG_AI_ENABLED==='true',externalApproved:env.RAG_EXTERNAL_APPROVED==='true',libraryExternalApproved:env.RAG_LIBRARY_EXTERNAL_APPROVED==='true',key:provider==='hive'?(env.HIVE_API_KEY||''):provider==='deepseek'?(env.DEEPSEEK_API_KEY||''):'',model:env.RAG_MODEL||'deepseek-flash',dailyLimit:Math.min(500,Math.max(1,Number(env.RAG_DAILY_LIMIT)||50))};}
-export function ready(c){return c.enabled&&c.externalApproved&&!!c.key&&(c.provider==='deepseek'||c.provider==='hive'&&c.model===HIVE_MODEL);}
+export function ragConfig(env=process.env){const provider=env.RAG_PROVIDER||'deepseek';return {provider,enabled:env.RAG_AI_ENABLED==='true',externalApproved:env.RAG_EXTERNAL_APPROVED==='true',libraryExternalApproved:env.RAG_LIBRARY_EXTERNAL_APPROVED==='true',key:provider==='hive'?(env.HIVE_API_KEY||''):provider==='deepseek'?(env.DEEPSEEK_API_KEY||''):provider==='openai'?(env.OPENAI_API_KEY||''):'',model:env.RAG_MODEL||'deepseek-flash',dailyLimit:Math.min(500,Math.max(1,Number(env.RAG_DAILY_LIMIT)||50))};}
+export function ready(c){return c.enabled&&c.externalApproved&&!!c.key&&(c.provider==='deepseek'||c.provider==='openai'&&/^gpt-/.test(c.model)||c.provider==='hive'&&c.model===HIVE_MODEL);}
 export async function boundedJson(url,options={},fetcher=fetch){
  let response;try{response=await fetcher(url,{...options,redirect:'error',signal:AbortSignal.timeout(60000)});}catch{throw new Error('딥시크 연결이 지연되거나 실패했습니다. 검색 근거는 계속 확인할 수 있습니다.');}
  if(!response.ok)throw new Error(response.status===429?'딥시크 사용량 제한입니다. 검색만 이용하거나 나중에 다시 요청하세요.':`딥시크 인증·모델·응답을 확인하세요. (HTTP ${response.status})`);
@@ -20,10 +21,11 @@ APP 자료만으로 답할 때는 법령 현행성·원문 확인 주의를 덧�
 export async function generateGrounded({question,history=[],sources,config,fetcher=fetch}){
  if(!ready(config))throw new Error('딥시크 키·모델·외부전송 승인이 아직 설정되지 않았습니다.');
  const allowed=new Set(sources.map((_,i)=>'S'+(i+1)));
- const hive=config.provider==='hive';
- const payload={model:config.model,stream:false,...(hive?{max_completion_tokens:2600,reasoning_effort:'none'}:{max_tokens:2600,thinking:{type:'disabled'}}),response_format:{type:'json_object'},messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify({question,previousUserQuestions:history.slice(-3),sources:sources.map((s,i)=>({sourceId:'S'+(i+1),title:s.title,documentId:s.documentId,locator:s.locator,kind:s.kind,currentness:s.kind==='APP'?'현재 제품 안내':s.currentness,dateNote:s.dateNote,quality:s.quality,originalAvailable:s.originalAvailable,originalName:s.originalName,route:s.route,text:s.text}))})}]};
- const response=await boundedJson((hive?HIVE_BASE:DEEPSEEK_BASE)+'/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:JSON.stringify(payload)},fetcher);
+ const hive=config.provider==='hive',openai=config.provider==='openai';
+ const payload={model:config.model,stream:false,...(hive?{max_completion_tokens:2600,reasoning_effort:'none'}:openai?{max_completion_tokens:2600}:{max_tokens:2600,thinking:{type:'disabled'}}),response_format:{type:'json_object'},messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify({question,previousUserQuestions:history.slice(-3),sources:sources.map((s,i)=>({sourceId:'S'+(i+1),title:s.title,documentId:s.documentId,locator:s.locator,kind:s.kind,currentness:s.kind==='APP'?'현재 제품 안내':s.currentness,dateNote:s.dateNote,quality:s.quality,originalAvailable:s.originalAvailable,originalName:s.originalName,route:s.route,text:s.text}))})}]};
+ const response=await boundedJson((hive?HIVE_BASE:openai?OPENAI_BASE:DEEPSEEK_BASE)+'/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${config.key}`,'Content-Type':'application/json'},body:JSON.stringify(payload)},fetcher);
  if(hive&&response.model!==config.model)throw new Error('요청한 딥시크 4.1 1017 모델과 응답 모델이 다릅니다. 다른 모델의 답변은 표시하지 않습니다.');
+ if(openai&&!(response.model===config.model||String(response.model||'').startsWith(config.model+'-')||String(response.model||'').startsWith(config.model+'@')))throw new Error('요청한 모델과 응답 모델이 다릅니다. 다른 모델의 답변은 표시하지 않습니다.');
  const choice=response.choices?.[0];if(choice?.finish_reason!=='stop')throw new Error('딥시크 답변이 완료되지 않았습니다. 검색 근거를 확인하세요.');
  let parsed;try{parsed=JSON.parse(choice.message?.content||'');}catch{throw new Error('딥시크 답변 형식을 확인할 수 없습니다. 검색 근거를 대신 표시합니다.');}
  if(!Array.isArray(parsed.sections)||parsed.sections.length>6||typeof parsed.needsReview!=='boolean')throw new Error('답변 구조 검증에 실패했습니다.');

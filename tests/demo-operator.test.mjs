@@ -56,7 +56,11 @@ test('환경 계정만 로그인되고 시연 기관 계정은 차단된다',asy
  const again=ensureDemoOperator(db,{adminId:'demo-op',adminPassword:'Secret!26'});
  assert.equal(again.created,false);
  assert.equal(again.disabled,0);
- assert.equal(db.prepare('SELECT COUNT(*) n FROM users').get().n,2);
+ assert.equal(db.prepare('SELECT COUNT(*) n FROM users').get().n,3);
+ const reviewer=db.prepare('SELECT role,active,org_id FROM users WHERE email=?').get('demo-op.reviewer@demo.internal');
+ assert.equal(reviewer.role,'REVIEWER');
+ assert.equal(reviewer.active,0);
+ assert.equal(reviewer.org_id,operator.org_id);
  assert.equal(db.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='DEMO_OPERATOR_READY'").get().n,1);
  const {login}=await serve(t,db,dir);
  const ok=await login('demo-op','Secret!26');
@@ -80,4 +84,3 @@ test('이메일 형식 계정도 같은 경로로 계속 로그인할 수 있다
  const {login}=await serve(t,db,dir);
  assert.equal((await login(email,'Operator!2611')).status,200);
 });
-

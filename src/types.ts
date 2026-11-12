@@ -1,5 +1,5 @@
 export type Role='EDITOR'|'REVIEWER'|'ADMIN';
-export interface User{id:string;org_id:string;org_name:string;name:string;email:string;role:Role;district:string;testAccount?:boolean}
+export interface User{id:string;org_id:string;org_name:string;name:string;email:string;role:Role;district:string;testAccount?:boolean;demoOperator?:boolean}
 export interface FileRecord{id:string;name:string;mime:string;kind:'PHOTO'|'EVIDENCE';org_id?:string;productName?:string;purpose?:string}
 export interface Group{id:string;lot_id:string;condition:string;quantity:number;inspection:string;note:string;available:number}
 export interface DraftGroup{condition:string;quantity:number;inspection:string;note:string}
