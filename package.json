@@ -23,7 +23,8 @@
     "ozd:html5:check": "node --env-file-if-exists=.env.ozd tools/ozd-bridge/check-html5.mjs",
     "ozd:convert": "node scripts/ozd-convert.mjs",
     "demo:single": "node --env-file-if-exists=.env scripts/demo-single.mjs",
-    "demo:seed": "node --env-file-if-exists=.env scripts/seed-samples.mjs"
+    "demo:seed": "node --env-file-if-exists=.env scripts/seed-samples.mjs",
+    "demo:images": "node --env-file-if-exists=.env scripts/refresh-showcase-images.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

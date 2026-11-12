@@ -10,12 +10,12 @@ import {seedAdditionalSamples} from '../server/demo-samples.mjs';
 import {archivePreview,archiveLots,restoreLots} from '../server/lot-management.mjs';
 import {listLots} from '../server/service.mjs';
 
-async function setup(t){
+async function setup(t,credentials={adminId:'admin',adminPassword:'1234'}){
  const dir=mkdtempSync(join(tmpdir(),'trade-bulk-demo-'));
  t.after(()=>rmSync(dir,{recursive:true,force:true}));
  const file=join(dir,'trade.sqlite'),db=openDatabase(file);
  t.after(()=>{try{db.close();}catch{}});
- const id=ensureSingleDemo(db),user=db.prepare('SELECT * FROM users WHERE id=?').get(id);
+ const id=ensureSingleDemo(db,credentials),user=db.prepare('SELECT * FROM users WHERE id=?').get(id);
  return {dir,file,db,user};
 }
 test('로컬 단일 테스트 계정 1개와 300개 가상 타기관 샘플 · 재실행 멱등',async t=>{
@@ -36,6 +36,23 @@ test('로컬 단일 테스트 계정 1개와 300개 가상 타기관 샘플 · �
  assert.ok(listLots(db,user,{q:'캐비넷'}).length>0);
  assert.deepEqual(listLots(db,user,{q:'캐비넷'}).map(x=>x.id),listLots(db,user,{q:'캐비닛'}).map(x=>x.id));
  assert.ok(listLots(db,user,{q:'의자 말고 책상'}).every(x=>!x.title.includes('의자')));
+});
+test('ADMIN_ID·ADMIN_PASSWORD로 단일 시연 계정 초기화',async t=>{
+ const {dir,db,user}=await setup(t,{adminId:'demo-operator',adminPassword:'LocalDemo!26'});
+ assert.equal(user.email,'demo-operator');
+ const origin='http://localhost:4310',app=createApp(db,{dataDir:dir,origin,demo:true,singleDemo:true});
+ const server=app.listen(0,'127.0.0.1');
+ await new Promise(resolve=>server.once('listening',resolve));
+ t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const base='http://127.0.0.1:'+server.address().port;
+ const login=(email,password)=>fetch(base+'/api/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+ const first=await login('demo-operator','LocalDemo!26');
+ assert.equal(first.status,200);
+ const info=await first.json();
+ assert.equal(info.user.testAccount,true);
+ assert.equal(info.user.role,'EDITOR');
+ assert.equal((await login('admin','1234')).status,401);
+ assert.throws(()=>ensureSingleDemo(db,{adminId:'partial-id'}),/ADMIN_PASSWORD/);
 });
 test('샘플 전체 초기화는 비밀번호·정확한 확인문구·스냅샷 필요, 300건 복원',async t=>{
  const {db,dir,user}=await setup(t);
