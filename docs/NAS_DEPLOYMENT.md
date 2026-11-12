@@ -571,3 +571,36 @@ Docker 엔진 저장소는 `/volume1/@docker`이고 새 이미지 크기는 524M
 조달 참고사진은 정확번호 후보 10건을 임시 저장하고 담당자가 1건을 선택 취소해 9건만 연결했다. `files`/PHOTO 증빙은 증가하지 않았다. 트럭 UI는 기본 20개/1회/111,000~180,000원, 200개/10회, 혼합 205개/11회, 쌓기 105개/3회, 100km/3회로 자동 갱신했고, 높이·중량 초과는 예시 차량 없음, 2,001개·13종은 400으로 거부했다. 모든 금액은 예시 운임이며 `binding=false`다.
 
 공개 도메인에서 `0.11.0`, Hive `deepseek-ai/deepseek-v4.1-flash-1017`, 조달 식별번호 `20269246`, RAG 121/8,164, packing API와 데스크톱 1440px·모바일 390px 화면을 확인했다. 모바일 결과 카드의 텍스트 열 깨짐도 수정해 가로 넘침 없이 표시된다. 기존 이미지 `mulppum-ieum:5bb6c32`와 환경파일 백업은 롤백용으로 보존했으며 `prune`, `down -v`, DB 삭제·초기화는 수행하지 않았다.
+
+## 시연 로그인 환경설정·데모 이미지 배포 — 2026-11-12
+
+단일 시연 계정을 `.env.single-demo`(저장소 밖, 권한 600)로 초기화하도록 바꾸고, 화면에 남아 있던 기본 계정 안내를 제거했다. 시연 물품 사진은 기존 인라인 SVG 일러스트 대신 생성 WebP 20종으로 교체했으며, 공개 6건의 사진은 기존 첨부를 지우지 않고 새 파일을 만들어 DB 참조만 바꾸는 방식으로 갱신했다. 생성 이미지는 실제 현물·공식 조달 사진이 아니며 README와 화면에서 시연용으로 표시한다.
+
+| 항목 | 실제 구성 |
+|---|---|
+| 앱 소스 | `3e0ab445e0aaa98dbd7349a4c8223e83b61d4662` (PR #16) |
+| 컨테이너 / 이미지 | `mulppum-ieum-app-1` / `mulppum-ieum:3e0ab44` |
+| 이미지 ID | `sha256:1c024ee2016c1e385562066c9b21c2d9dd591e02ec7a360fdfc947d2af437ca1` |
+| 릴리스 | `/volume2/docker/trade/releases/3e0ab44` |
+| 백업 (교체 전) | `backups/2026-11-12T01-20-17Z-showcase` (schema8, 2,207묶음·18첨부·7계정·보관 2,194) |
+| 별도 복원 검증 | `backups/restore-checks/2026-11-12T01-20-17Z-showcase` (`integrity_check=ok`, FK 오류 0) |
+| 환경 백업 | `deployments/env.nas.before-3e0ab44` |
+| 롤백 기준 | `current-before-3e0ab44.txt` = `releases/1372822`, 이미지 `mulppum-ieum:1372822` 보존 |
+
+`npm ci`(취약점 0) · `npm test` 205개 · `npm run build` · `LANG=C.UTF-8 LC_ALL=C.UTF-8 npm run test:e2e` 39개가 통과했다. 배포 후 `/api/health` 200, 컨테이너 healthy, 기동 로그에 오류가 없다.
+
+데모 화면에는 샘플 300건을 추가해 공개 물품이 306건이 됐고, 공개 6건과 샘플 30건의 사진을 생성 이미지로 교체했다. `/api/files/:id`는 `image/webp` 12,226바이트로 응답하며 해시가 `server/demo-assets/whiteboard.webp`와 일치한다.
+
+| 확인 | 결과 |
+|---|---|
+| 공개 물품 | 306건(기존 6 + 샘플 300) |
+| 등록 물품(내 기관) | 9건 = 초안 7 + 공개 2 |
+| 삭제 보관함 | 2,194건, 복구 가능, 원본·대장·감사 이력 보존 |
+| 업로드 파일 | 74개(기존 18 + 샘플 20 + 교체 36), 기존 파일 삭제 없음 |
+| DB | `user_version=8`, `integrity_check=ok` |
+| PC 1440px·모바일 390px | `/market`·`/manage`·`/packing` 가로 넘침 0, 페이지 오류 0 |
+
+운영 DB·uploads·RAG·API 키·모델 설정은 변경하지 않았고, 세 Compose 파일(`nas.compose.yml`·`nas.network.compose.yml`·`nas.rag.compose.yml`)을 함께 적용했다. `prune`, `down -v`, DB 삭제·초기화, `reset --hard`는 사용하지 않았다.
+
+GitLab(`gitlab.aigov.go.kr`)은 2026-11-12 00:00부터 운영체계 점검으로 접속이 404로 막혀 있어 이번 변경을 미러링하지 못했다. 서비스 재개 후 `gitlab/main`을 부모로 하는 콘텐츠 스냅샷 커밋을 만들어 fast-forward로 반영한다(force-push 금지).
+
